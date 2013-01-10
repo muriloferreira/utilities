@@ -1,0 +1,27 @@
+public class Modulo11 {
+
+  public static void main(String[] args) {
+		String numeroCartao = "636624100000000015"; //63662410000000001510
+		
+		int soma = 0;
+		int fator = 2;
+
+		for (int i = numeroCartao.length() - 1; i >= 0; i--) {
+			soma += Integer.valueOf(String.valueOf(numeroCartao.charAt(i))).intValue() * fator;
+			//System.out.printf("%s, %s, %s, %s\n", Integer.valueOf(String.valueOf(numeroCartao.charAt(i))).intValue(), fator, Integer.valueOf(String.valueOf(numeroCartao.charAt(i))).intValue() * fator, soma);
+			fator = fator >= 9 ? 2 : fator+1;
+		}
+
+		//System.out.println("Resto: " + soma%11);
+		soma = soma % 11;
+		
+		if (soma < 2) {
+			numeroCartao += 0;
+		} else {
+			numeroCartao += 11-soma;
+		}		
+		
+		System.out.printf("Cartão: %s, Digitos: %s, Soma: %s", numeroCartao, numeroCartao.length(), soma);
+	}
+	
+}
