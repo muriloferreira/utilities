@@ -1,0 +1,4 @@
+MyIp is 192.168.1.34 (localhost)
+My friend ip is 192.168.1.210, i need accept connections from 182.168.1.210 to conect in my localhost (192.168.1.34)
+GRANT ALL PRIVILEGES ON *.* TO  'root'@'192.168.1.210'  IDENTIFIED  BY 'root';
+FLUSH PRIVILEGES;
