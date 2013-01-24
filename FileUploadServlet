@@ -1,0 +1,61 @@
+protected void doPost(HttpServletRequest res, HttpServletResponse response)
+  		throws ServletException, IOException {
+ 
+		// Commons file upload classes are specifically instantiated
+		FileItemFactory factory = new DiskFileItemFactory();
+ 
+		ServletFileUpload upload = new ServletFileUpload(factory);
+		ServletOutputStream out = null;
+ 
+		try {
+			// Parse the incoming HTTP request
+			// Commons takes over incoming request at this point
+			// Get an iterator for all the data that was sent
+			List items = upload.parseRequest(res);
+			Iterator iter = items.iterator();
+ 
+			// Set a response content type
+			response.setContentType("text/html");
+ 
+			// Setup the output stream for the return XML data
+			out = response.getOutputStream();
+ 
+			// Iterate through the incoming request data
+			while (iter.hasNext()) {
+				// Get the current item in the iteration
+				FileItem item = (FileItem) iter.next();
+ 
+				// If the current item is an HTML form field
+				if (item.isFormField()) {
+					// Return an XML node with the field name and value
+					out.println("this is a form data " + item.getFieldName() + "<br>");
+ 
+					// If the current item is file data
+				} else {
+					// Specify where on disk to write the file
+					// Using a servlet init param to specify location on disk
+					// Write the file data to disk
+					// TODO: Place restrictions on upload data
+					File disk = new File("C:\\uploaded_files\\"+item.getName());
+					item.write(disk);
+ 
+					// Return an XML node with the file name and size (in bytes)
+					//out.println(getServletContext().getRealPath("/WEB_INF"));
+					out.println("this is a file with name: " + item.getName());
+				}
+			}
+ 
+			// Close off the response XML data and stream
+ 
+			out.close();
+			// Rudimentary handling of any exceptions
+			// TODO: Something useful if an error occurs
+		} catch (FileUploadException fue) {
+			fue.printStackTrace();
+		} catch (IOException ioe) {
+			ioe.printStackTrace();
+		} catch (Exception e) {
+			e.printStackTrace();
+		}
+ 
+	}
