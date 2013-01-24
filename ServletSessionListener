@@ -40,3 +40,32 @@ public class myServletListener implements ServletContextListener {
     }
  
 }
+
+
+// test
+/**
+	 * @see HttpServlet#doGet(HttpServletRequest request, HttpServletResponse
+	 *      response)
+	 */
+	protected void doGet(HttpServletRequest request,
+			HttpServletResponse response) throws ServletException, IOException {
+ 
+		response.setContentType("text/html");
+ 
+		Database db = (Database) getServletContext().getAttribute("db");
+		PrintWriter out = response.getWriter();
+ 
+		String sql = "select * from user";
+		ResultSet rs;
+		try {
+			rs = db.runSql(sql);
+ 
+			while(rs.next()){
+				out.println(rs.getString("user_name"));
+			}
+		} catch (SQLException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
+ 
+	}
