@@ -1,0 +1,78 @@
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.ResultSetMetaData;
+import java.sql.SQLException;
+import java.sql.Types;
+import java.util.Date;
+import oracle.jdbc.pool.OracleDataSource;
+ 
+public class DBAccessPool 
+{
+     
+     public static void main(String args[]) throws ClassNotFoundException, SQLException 
+     {
+  		ResultSetMetaData metaData = null;
+			String columnName = null;
+			int columnType;
+			String columnValue = null;
+ 
+			OracleDataSource ds = new OracleDataSource();
+			ds.setDriverType("thin");
+			ds.setServerName("serverName");
+			ds.setPortNumber(1561);
+			ds.setDatabaseName("dbName");
+			ds.setUser("userName");
+			ds.setPassword("password");
+          
+         
+			Connection conn = ds.getConnection();
+ 
+			PreparedStatement stmt = conn.prepareStatement(selectQuery);
+           
+          
+			ResultSet rset = stmt.executeQuery();
+			metaData = rset.getMetaData();
+			if(rset.next()) {
+			   for(int columnCount = 1; columnCount <= metaData.getColumnCount();columnCount++)
+			   {
+				   columnValue = null;
+				   columnName = metaData.getColumnName(columnCount);
+				   columnType = metaData.getColumnType(columnCount);
+				   
+				   if(columnType == Types.CHAR || columnType == Types.VARCHAR || columnType == Types.LONGVARCHAR)
+				   {
+					   columnValue = rset.getString(columnName);
+				   }
+				   else if(columnType == Types.INTEGER || columnType == Types.BIGINT || columnType == Types.SMALLINT || columnType == Types.NUMERIC)
+				   {
+					   long templong = rset.getLong(columnName);
+					   if(!rset.wasNull())
+					   {
+						   columnValue  = Long.toString(templong);
+					   }
+				   }
+				   else if(columnType == Types.DECIMAL || columnType == Types.DOUBLE || columnType == Types.FLOAT || columnType == Types.REAL)
+				   {
+					   double tempDouble1 = rset.getDouble(columnName);
+					   if(!rset.wasNull())
+					   {
+						   columnValue  = Double.toString(tempDouble1);
+					   }
+				   }
+				   else if(columnType == Types.TIME || columnType == Types.TIMESTAMP || columnType == Types.DATE)
+				   {
+					   Timestamp sqlTimeStamp = rset.getTimestamp(columnName);
+					   if(!rset.wasNull())
+					   {
+						   columnValue = sqlTimeStamp.toString();
+					   }
+				   }
+				   System.out.println("Column Name: "+columnName+ " Column Type: "+columnType + "  Column Value: "+columnValue + " "+metaData.getColumnClassName(columnCount));
+			   }
+			   
+			   }
+			rset.close();
+			stmt.close();
+			conn.close();
+  }
