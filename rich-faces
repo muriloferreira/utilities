@@ -1,0 +1,27 @@
+<f:view>  
+  <script type="text/javascript">  
+<!--  
+function submitRowClick(id) {  
+  document.getElementById("hiddenForm:rowid").value = id;  
+  return document.forms.submit();  
+}  
+//-->  
+</script>  
+  <h:form id="hiddenForm">  
+    <h:inputText id="rowid" value="#{clusterBean.current}" />  
+  </h:form>  
+  <rich:panel header="List" id="clusterList"  
+    style="height: 295px; overflow: auto;" styleClass="fullWidth">  
+    <rich:dataTable value="#{clusterBean.list}" var="cluster"  
+      id="clusterListTable" width="90%"  
+      onRow Click="submitRowClick(#{cluster.id});"  
+      onRowMouse Over="this.style.backgroundColor='#FFFFAA'"  
+      onRowMouse Out="this.style.backgroundColor='#{a4jSkin.tableBackgroundColor}'">  
+      <rich:column id="name">  
+        <b>#{cluster.name}</b>  
+      </rich:column>  
+      <rich:column id="description">#{cluster.description}</rich:column>  
+      <rich:column id="activated">#{cluster.activated}</rich:column>  
+    </rich:dataTable>  
+  </rich:panel>  
+</f:view> 
