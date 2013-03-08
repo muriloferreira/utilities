@@ -8,3 +8,16 @@ Connection URL: mysql://$OPENSHIFT_MYSQL_DB_HOST:$OPENSHIFT_MYSQL_DB_PORT/
 
 You can manage your new MySQL database by also embedding phpmyadmin-3.4.
 The phpmyadmin username and password will be the same as the MySQL credentials above.
+
+
+
+You can get a list of cartridges by running
+
+rhc cartridge list
+You can manage the cartridge by running one of these commands
+
+rhc cartridge start -a open -c mysql-5.1
+rhc cartridge stop -a open -c mysql-5.1
+rhc cartridge restart -a open -c mysql-5.1
+rhc cartridge reload -a open -c mysql-5.1
+rhc cartridge status -a open -c mysql-5.1
