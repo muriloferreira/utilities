@@ -1,0 +1,6 @@
+keytool -genkey -dname "cn=Applet, ou=LCMI, o=UFPR, c=BR" -alias key -keystore C:/mykeystore -storepass 123456 -validity 180
+jarsigner -keystore C:/mykeystore -storepass 123456 -signedjar C:\Users\murilo.ferreira\Desktop\applet\applet_fat.jar C:\Users\murilo.ferreira\Desktop\applet\applet_fat.jar key
+
+
+keytool -genkey -dname "cn=AppletSand, ou=AppletSand, o=AppletSand, c=BR" -alias tomcat -keystore c:\teste_chave\mykeystore.jks -keyalg DSA -storepass 123456 
+jarsigner -keystore c:\teste_chave\mykeystore.jks -storepass 123456 -signedjar C:\Users\murilo.ferreira\Desktop\applet\applet_assigned.jar C:\Users\murilo.ferreira\Desktop\applet\applet.jar tomcat
