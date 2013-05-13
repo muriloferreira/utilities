@@ -1,5 +1,5 @@
 - Qual será a decisão do ponto de origem na CNC ?
-  [ ] Centro
+	[ ] Centro
 	[ ] Canto esquerdo inferior
 	[ ] Canto esquerdo superior
 	[ ] Canto direito inferior
@@ -18,7 +18,14 @@
 	[ ] Canto esquerdo superior
 	[ ] Canto direito inferior
 	[ ] Canto direito superior
-
+	
+- Qual será a decisão do ponto de origem da ferramenta?
+	[ ] Centro
+	[ ] Canto esquerdo inferior
+	[ ] Canto esquerdo superior
+	[ ] Canto direito inferior
+	[ ] Canto direito superior
+	
 - O supervisório precisa ter recurso a impressão de etiqueta ?
 	[ ] SIM
 	[ ] NÃO
