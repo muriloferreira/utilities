@@ -1,0 +1,109 @@
+- Qual será a decisão do ponto de origem na CNC ?
+  [ ] Centro
+	[ ] Canto esquerdo inferior
+	[ ] Canto esquerdo superior
+	[ ] Canto direito inferior
+	[ ] Canto direito superior
+
+- Qual será a decisão do ponto de origem no Editor de programas do supervisório?
+	[ ] Centro
+	[ ] Canto esquerdo inferior
+	[ ] Canto esquerdo superior
+	[ ] Canto direito inferior
+	[ ] Canto direito superior
+
+- Qual será a decisão do ponto de origem de DXF Importado?
+	[ ] Centro
+	[ ] Canto esquerdo inferior
+	[ ] Canto esquerdo superior
+	[ ] Canto direito inferior
+	[ ] Canto direito superior
+
+- O supervisório precisa ter recurso a impressão de etiqueta ?
+	[ ] SIM
+	[ ] NÃO
+	
+- O supervisório precisa ter recurso a leitor de código de barras ?
+	[ ] SIM
+	[ ] NÃO
+	
+- Os códigos de barras informam parametria das dimensões das peças ?
+	[ ] SIM
+	[ ] NÃO
+
+- Nos códigos de barras existe alguma variável a ser interpretada pelo supervisório?
+	[ ] SIM
+	[ ] NÃO
+	
+- Os programas de furação terão algum tipo de parametrização ou formulas nos furos ?
+	[ ] SIM
+	[ ] NÃO
+
+- Quais seriam as parametrizações ?
+	[ ] Nenhum
+	[ ] Centro
+	[ ] Canto esquerdo inferior
+	[ ] Canto esquerdo superior
+	[ ] Canto direito inferior
+	[ ] Canto direito superior
+	[ ] Dimensões da peça - variavel
+	[ ] Dimensões da peça + variavel
+	[ ] Dimensões da peça / variavel
+	[ ] Dimensões da peça * variavel
+	[ ] Outras
+	
+- Existem limites de quantidade de furos na peça ?
+	[ ] SIM
+	[ ] NÃO
+
+- Existem limites de posição de furos ou posições inseguras onde a máquina não pode executar furação ?
+	[ ] SIM
+	[ ] NÃO
+	
+- Quais seriam os limites de posição de furos ou posições inseguras onde a máquina não pode executar furação ?
+	R: 
+
+- Os offsets das ferramentas, vamos ter algum alerta para o usúario reconfigurar os offsets da ferrameta com base em algum horímetro ?
+	[ ] NÃO
+	[ ] SIM, por hora uso da ferramenta individual
+	[ ] SIM, por hora uso da cnc geral
+	
+- Em casos de termos duas ferramentas uma broca de 10mm e outra broca de 20mm e uma fresa de 8mm, o que fazemos se o desenho tiver um furo de 25 mm ?
+	[ ] Não executa o furo por não existir ferramenta com o diâmetro do furo
+	[ ] Excecuta fazendo abertura com a broca de 20mm e faz um retrabalho com a fresa de 8mm até atingir o furo de 25mm
+	[ ] Executa o furo somente com fresa de 8mm
+
+- As velocidadas de furação é individual por ferramenta ?
+	[ ] SIM
+	[ ] NÃO
+	
+- As furações são todas somente na horizontal ou vamos ter furação com as ferramentas inclinadas em graus (Exemplo: fresa em 45graus, fresa em 90graus e etc..)
+	[ ] SIM
+	[ ] NÃO
+	
+- Qual a tolerância máxima na precissão da CNC ?
+	R:
+
+- Em caso de algum posicionamento estourar tolerância máxima.
+	[ ] Executa a furação
+	[ ] Exibe msg de erro no supervisório
+	
+- Qual a espessura máxima de material suportado pela CNC ?
+	R: 
+	
+- Qual a espessura miníma de material suportado pela CNC ?
+	R:
+
+- Qual o comprimento máximo de material suportado pela CNC ?
+	R:
+	
+- Qual o comprimento minímo de material suportado pela CNC ?
+	R:
+	
+- Qual a largura máximo de material suportado pela CNC ?
+	R:
+	
+- Qual a largura miníma de material suportado pela CNC ?
+	R:
+	
+- 
