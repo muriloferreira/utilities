@@ -1,0 +1,2158 @@
+<?xml version="1.0" encoding="utf-8"?>
+<controls:DefaultSankhyaApplication preloader="br.com.sankhya.controls.managers.CustomPreloader" 
+	xmlns:controls="br.com.sankhya.controls.*"
+	xmlns:mx="http://www.adobe.com/2006/mxml"
+	layout="vertical"
+	xmlns:dynaform="br.com.sankhya.db.dynaform.*"
+	initialize="iniMovFin()"
+	implements="br.com.sankhya.db.dynaform.IDynaformVisitor,br.com.sankhya.db.dynaform.IDynaformFieldsVisitor,br.com.sankhya.db.IDBCriteriaProvider,br.com.sankhya.db.dynaform.IDynaformFieldBuilder,br.com.sankhya.controls.IGridPrinterParam"
+	xmlns:ui="br.com.sankhya.db.ui.*"
+	xmlns:dwf="br.com.sankhya.dwf.*"
+	indexPK="br.com.sankhya.fin.cad.movimentacaoFinanceira"
+	xmlns:baixa="br.com.sankhya.commons.baixa.*"
+	xmlns:db="br.com.sankhya.db.*" 
+	xmlns:renderers="br.com.sankhya.controls.renderers.*" 
+	xmlns:compactpanel="br.com.sankhya.controls.compactpanel.*" 
+	xmlns:popupbutton="br.com.sankhya.controls.popupbutton.*"
+	verticalGap="0"
+>
+
+	<mx:Script>
+		<![CDATA[
+			import br.com.sankhya.commons.liberacoes.PopUpSolicLibOrcamento;
+			import br.com.sankhya.mgefin.movimentacaofinanceira.PopUpCotacaoMoeda;
+			import br.com.sankhya.controls.mgeparameters.MGEParameters;
+			import mx.controls.TextArea;
+			import br.com.sankhya.mgefin.movimentacaofinanceira.PopUpAgrupamentoFinanceiroResult;
+			import br.com.sankhya.dwf.LiteralCriteria;
+			import br.com.sankhya.db.ui.DBPesquisa;
+			import br.com.sankhya.db.DataSetsContainer;
+			import br.com.sankhya.mgefin.CotacaoMoedaPopUp;
+			import br.com.sankhya.mgefin.consultasaldo.SaldoRenderer;
+			import br.com.sankhya.util.html.HTMLPopup;
+			import br.com.sankhya.commons.parcelamento.Parcelamento;
+			import br.com.sankhya.commons.parcelamento.ParcelamentoEvent;
+			import br.com.sankhya.mgefin.OutrosImpostosPopUp;
+			import br.com.sankhya.commons.baixa.BaixaHelper;
+			import br.com.sankhya.commons.cmc7.CMC7Panel;
+			import mx.core.Application;
+			import br.com.sankhya.commons.liberacoes.PainelLiberacoes;
+			import br.com.sankhya.controls.popup.SanPopUp;
+			import br.com.sankhya.controls.popup.SanPopUpManager;
+			import br.com.sankhya.controls.ISanDataControls;
+			import br.com.sankhya.controls.ConfigurableDataGrid;
+			import br.com.sankhya.util.StringUtils;
+			import br.com.sankhya.controls.KeySequence;
+			import br.com.sankhya.util.authorization.MGEAuthorizationData;
+			import br.com.sankhya.util.authorization.MGEAuthorization;
+			import br.com.sankhya.commons.parceiro.CadastroParceiroSimplificado;
+			import br.com.sankhya.mgefin.impressaocheque.ParametrosImpressaoPopUp;
+			import mx.events.MenuEvent;
+			import br.com.sankhya.commons.rateio.RateioPopUp;
+			import br.com.sankhya.db.DBDataSetEvent;
+			import mx.controls.dataGridClasses.DataGridColumn;
+			import br.com.sankhya.db.ui.DBDataGrid;
+			import br.com.sankhya.db.ui.DBNumericInput;
+			import br.com.sankhya.util.NumberUtils;
+			import mx.core.UIComponent;
+			import br.com.sankhya.controls.resizemanager.ResizeManager;
+			import mx.events.CloseEvent;
+			import br.com.sankhya.commons.estorno.EstornoPopUp;
+			import mx.managers.PopUpManager;
+			import mx.containers.TitleWindow;
+			import br.com.sankhya.db.DBDataSet;
+			import br.com.sankhya.util.datetime.DateUtil;
+			import mx.collections.ArrayCollection;
+			import br.com.sankhya.util.http.ServiceProxy;
+			import br.com.sankhya.db.Field;
+			import br.com.sankhya.db.DBObserverAdapter;
+			import br.com.sankhya.db.DBCriteriaParameter;
+			import br.com.sankhya.db.DBCriteria;
+			import br.com.sankhya.db.IDBCriteria;
+			import br.com.sankhya.db.IDBDataSet;
+			import br.com.sankhya.util.MessageUtils;
+			import mx.controls.Menu;
+
+			public const NENHUM:String = "N";
+			public const HOJE:String = "H";
+			public const SEMANA_CORRENTE:String = "S";
+			public const MES_CORRENTE:String = "M";
+			public const TUDO:String = "T";
+			public const PERSONALIZADO:String = "P";
+
+			public const PODEEXCLUIR_DEVCHEQUE:String = "Financeiro.podeExcluir.DevCheque";
+			public const PODEEXCLUIR_BPO:String = "Financeiro.podeExcluir.BPO";
+			private static const SIGLA_CONTROLE_INIBE_RECEITAS:String = "R";
+			private static const SIGLA_CONTROLE_INIBE_DESPESAS:String = "D";
+
+			private var _nunotaToLoad:String = null;
+
+			private var _dsFinanceiro:DBDataSet;
+			private var _dsObserver:DBObserverAdapter;
+			private var _cpNumNota:UIComponent;
+			private var _cpProvisao:UIComponent;
+			private var _estadoCpNumNota:Boolean;
+			private var _estadoCpProvisao:Boolean;
+			private var _cadastroParceiroSimplificado:CadastroParceiroSimplificado;
+			private var _descricaoDespCart:String;
+			private var _paramPermiteDuplicarFinanceiro:Boolean;
+			[Bindable] private var _paramUtilizaNroPedidoFinanceiro:Boolean;
+
+			[Bindable] private var podeBaixar:Boolean;
+			[Bindable] private var _podeEstornar:Boolean;
+			[Bindable] private var podeRatear:Boolean;
+			[Bindable] private var podeParcelar:Boolean;
+			[Bindable] private var podeRenegociar:Boolean;
+			[Bindable] private var podeAlterar:Boolean = true;
+			[Bindable] private var juroObrig:Boolean;
+			[Bindable] private var baixarDevChequeVariosTitulos:Boolean;
+			[Bindable] private var _equifaxDisponivel:Boolean = false;
+
+			[Bindable] public var intervaloVencimento:String = NENHUM;
+			[Bindable] private var vctoIni:String;
+			[Bindable] private var vctoFim:String;
+			[Bindable] public var _nufin:DBNumericInput;
+			[Bindable] public var _nureneg:int;
+			[Bindable] public var ultimos:int = 0;
+			[Bindable] public var proximos:int = 0;
+			[Bindable] public var corReceita:uint = 0x0000FF;
+			[Bindable] public var corDespesa:uint = 0xFF0000;
+			
+			private var _popupCotacaoMoeda:PopUpCotacaoMoeda;
+			private var _venceHojeColor:Object = null;
+			private var _vencidoColor:Object = null;
+			private var _aVencerColor:Object = null;
+			private var _jaBaixadoColor:Object = null;
+			private var _rateadoColor:Object = null;
+			private var _ratearColor:Object = null;
+			private var _btnBaixarStyleName:String;
+			private var btnBaixarStyleNameChanged:Boolean;
+			private var _btnEstornarStyleName:String;
+			private var btnEstornarStyleNameChanged:Boolean;
+			private var _btnRatearStyleName:String;
+			private var btnRatearStyleNameChanged:Boolean;
+			private var _btnParcelarStyleName:String;
+			private var btnParcelarStyleNameChanged:Boolean;
+			private var _btnRenegociarStyleName:String;
+			private var btnRenegociarStyleNameChanged:Boolean;
+			private var _btnEquifaxStyleName:String;
+			private var btnEquifaxStyleNameChanged:Boolean;
+			private var _dadosCopia:Object;
+			private var _validouExclusao:Boolean;
+			private var _msgBPO:String;
+			private var _msgDevCheque:String;
+			private var _staticFilterLoaded:Boolean = false;
+			private var _afterLoadFilter:Function;
+			private var _painelLiberacoes:PainelLiberacoes;
+			private var _paramPermiteEstornoSemRecomposicao:Boolean;
+			private var _paramUsaLibBxPagDig:Boolean;
+			private var _utilizaEmpresaRecebimento:Boolean;
+			private var _carregouBarraTotalizadores:Boolean;
+			private var _mostraValorMoeda:Boolean;
+
+			private var _inibeAcessoReceitas:Boolean = true;
+			private var _inibeAcessoDespesas:Boolean = true;
+
+			private var _contaCaixa:Number;
+			private var _usuarioEhCaixa:Boolean;
+    		private var _nuCaixa:Number;
+
+			override public function styleChanged(styleProp:String):void {
+				super.styleChanged(styleProp);
+
+				var venceHojeColor:Object = getStyle("venceHojeColor");
+				var vencidoColor:Object = getStyle("vencidoColor");
+				var aVencerColor:Object = getStyle("aVencerColor");
+				var jaBaixadoColor:Object = getStyle("jaBaixadoColor");
+				var rateadoColor:Object = getStyle("rateadoColor");
+				var ratearColor:Object = getStyle("ratearColor");
+				var btnBaixarStyleName:String = getStyle("btnBaixarStyleName");
+				var btnEstornarStyleName:String = getStyle("btnEstornarStyleName");
+				var btnRatearStyleName:String = getStyle("btnRatearStyleName");
+				var btnParcelarStyleName:String = getStyle("btnParcelarStyleName");
+				var btnRenegociarStyleName:String = getStyle("btnRenegociarStyleName");
+				var btnEquifaxStyleName:String = getStyle("btnEquifaxStyleName");
+
+				if(venceHojeColor != null && StyleManager.isValidStyleValue(venceHojeColor)) {
+					_venceHojeColor = venceHojeColor;
+				}
+				if(vencidoColor != null && StyleManager.isValidStyleValue(vencidoColor)) {
+					_vencidoColor = vencidoColor;
+				}
+				if(aVencerColor != null && StyleManager.isValidStyleValue(aVencerColor)) {
+					_aVencerColor = aVencerColor;
+				}
+				if(jaBaixadoColor != null && StyleManager.isValidStyleValue(jaBaixadoColor)) {
+					_jaBaixadoColor = jaBaixadoColor;
+				}
+				if(rateadoColor != null && StyleManager.isValidStyleValue(rateadoColor)) {
+					_rateadoColor = rateadoColor;
+				}
+				if(ratearColor != null && StyleManager.isValidStyleValue(ratearColor)) {
+					_ratearColor = ratearColor;
+				}
+				if(btnBaixarStyleName != null && StyleManager.isValidStyleValue(btnBaixarStyleName)) {
+					btnBaixarStyleNameChanged = true;
+					_btnBaixarStyleName = btnBaixarStyleName;
+				}
+				if(btnEstornarStyleName != null && StyleManager.isValidStyleValue(btnEstornarStyleName)) {
+					btnEstornarStyleNameChanged = true;
+					_btnEstornarStyleName = btnEstornarStyleName;
+				}
+				if(btnRatearStyleName != null && StyleManager.isValidStyleValue(btnRatearStyleName)) {
+					btnRatearStyleNameChanged = true;
+					_btnRatearStyleName = btnRatearStyleName;
+				}
+				if(btnParcelarStyleName != null && StyleManager.isValidStyleValue(btnParcelarStyleName)) {
+					btnParcelarStyleNameChanged = true;
+					_btnParcelarStyleName = btnParcelarStyleName;
+				}
+				if(btnRenegociarStyleName != null && StyleManager.isValidStyleValue(btnRenegociarStyleName)) {
+					btnRenegociarStyleNameChanged = true;
+					_btnRenegociarStyleName = btnRenegociarStyleName;
+				}
+				if(btnEquifaxStyleName != null && StyleManager.isValidStyleValue(btnEquifaxStyleName)) {
+					btnEquifaxStyleNameChanged = true;
+					_btnEquifaxStyleName = btnEquifaxStyleName;
+				}
+			}
+
+			private function initHeaderPanel():void {
+				if(btnBaixarStyleNameChanged) {
+					btnBaixarStyleNameChanged = false;
+					btnBaixar.styleName = _btnBaixarStyleName;
+				}
+				if(btnEstornarStyleNameChanged) {
+					btnEstornarStyleNameChanged = false;
+					btnEstornar.styleName = _btnEstornarStyleName;
+				}
+				if(btnRatearStyleNameChanged) {
+					btnRatearStyleNameChanged = false;
+					btnRatear.styleName = _btnRatearStyleName;
+				}
+				if(btnParcelarStyleNameChanged) {
+					btnParcelarStyleNameChanged = false;
+					btnParcelar.styleName = _btnParcelarStyleName;
+				}
+				if(btnRenegociarStyleNameChanged) {
+					btnRenegociarStyleNameChanged = false;
+					btnRenegociar.styleName = _btnRenegociarStyleName;
+				}
+				if(btnEquifaxStyleNameChanged) {
+					btnEquifaxStyleNameChanged = false;
+					btnEquifax.styleName = _btnEquifaxStyleName;
+				}
+			}
+
+            private function getCriteriaByNunota():DBCriteria{
+            	if (_nunotaToLoad != null) {
+	                var where:String = "this.NUNOTA = ?";
+					var params:Array = new Array();
+					params.push(new DBCriteriaParameter("N",_nunotaToLoad));
+                    return new DBCriteria(where,params);
+            	}
+            return null;
+            }
+            
+            private function loadByNunota():void{
+				if (_dsFinanceiro != null) {
+		            _dsFinanceiro.refresh(getCriteriaByNunota());
+		            _nunotaToLoad = null;
+			    }
+			}
+
+			override public function loadByPK(objPK:Object):void{
+			    if (objPK != null && objPK.hasOwnProperty("NUNOTA")) {
+			    	_nunotaToLoad = objPK["NUNOTA"];
+			    	loadByNunota();
+			    } else {
+				   dynaformFinanceiro.loadByPK(objPK);
+			    }
+			}
+
+			public function visitField(fieldID:String, source:XML, field:UIComponent, dynaform:Dynaform):void{
+				if(fieldID == "NUMNOTA"){
+					_cpNumNota = field;
+					_estadoCpNumNota = _cpNumNota.enabled;
+				} else if(fieldID == "PROVISAO"){
+					_cpProvisao = field;
+					_estadoCpProvisao = field.enabled;
+				}else if(fieldID == "CODTIPOPER"){
+					if(field is DBPesquisa){
+						var pesquisa:DBPesquisa = field as DBPesquisa;
+						pesquisa.getEnvironmentCriteria = getTopCriteria;
+					}
+				}else if (fieldID == "CODPARC"){
+					(field as DBPesquisa).showInactives = true;
+				}else if (fieldID == "HISTORICO"){
+					(field as TextArea).maxChars = 255;
+				}else if (fieldID == "VLRICMS"){
+					(field as DBNumericInput).enabled = false;
+				}
+			}
+			
+			private function getTopCriteria():Array{
+				var origemFinanceiro:String = _dsFinanceiro.getFieldValueAsString("ORIGEM");
+				
+				if(origemFinanceiro == "F" || _dsFinanceiro.isInsertionMode() ){
+					return [new LiteralCriteria("this.TIPMOV = 'I'")];
+				}
+				
+				return [];
+			}			
+
+			public function setDataSet(ds:IDBDataSet):void{
+				_dsFinanceiro = ds as DBDataSet;
+				
+				_dsFinanceiro.canCopy = _paramPermiteDuplicarFinanceiro;
+				_dsFinanceiro.crudListener = "br.com.sankhya.mgefin.model.listeners.MovimentacaoFinanceiraCrudListener";
+				
+				_dsObserver = new DBObserverAdapter();
+				_dsObserver.currentLineChangedImp = function(index:int):void{
+					if(index > -1){
+					    verificaAcessoBotoesContexto();
+					    infoRodape();
+					} else {
+						verificaAcessoBotoesContexto(true);
+					}
+					
+					if(_carregouBarraTotalizadores){
+						atualizaValoresBarraTotalizadores(null);
+					}
+					var origem:String;
+					if(_dsFinanceiro.getFieldValue("ORIGEM")){
+						origem = _dsFinanceiro.getFieldValue("ORIGEM").toString();
+					}
+					_dadosCopia = null;
+					desabilitaCpEstoque();
+
+					if(!_dsFinanceiro.isRecordDirty()) {
+				    	verificaAcessoBotoesContexto();
+					}
+					
+					if(baixaPanel.nuFinBaixa != -1) {
+						baixaPanel.resetBaixa(false);
+					}
+					
+					changeMenuItem("I", "enabled", true);
+				    changeMenuItem("C", "enabled", true);
+				    changeMenuItem("O", "enabled", true);
+				    var codMoeda:Number = _dsFinanceiro.getFieldValueAsNumberOrZero("CODMOEDA");
+				    if (codMoeda == 0) {
+				        changeMenuItem("M", "enabled", false);
+				        changeMenuItem("R", "enabled", false);
+				    } else {
+				        changeMenuItem("M", "enabled", true);
+				        changeMenuItem("R", "enabled", true);
+				    }
+				    
+				    if (index > -1){ 
+						_dsFinanceiro.setFieldValue("VLRICMS", NumberUtils.round(_dsFinanceiro.getFieldValueAsNumberOrZero("BASEICMS") *  _dsFinanceiro.getFieldValueAsNumberOrZero("ALIQICMS") / 100, 2));
+				    }
+				};
+				
+				_dsObserver.editionCanceledImp = function():void{
+					_dadosCopia = null;
+					verificaAcessoBotoesContexto();
+				}
+				
+				_dsObserver.dataSavedImp = function(isNew:Boolean):void{
+					_dadosCopia = null;
+					verificaAcessoBotoesContexto();
+					atualizaValoresBarraTotalizadores(null);
+				}
+				
+				_dsObserver.insertionModeActivatedImp = function():void {
+					verificaAcessoBotoesContexto(true); //desabilita botões de controle
+
+					if(_cpNumNota != null) {
+						_cpNumNota.enabled = true;
+					}
+
+					if(_cpProvisao != null) {
+						_cpProvisao.enabled = true;
+					}
+					
+					changeMenuItem("I", "enabled", false);
+				    changeMenuItem("C", "enabled", false);
+				    changeMenuItem("O", "enabled", false);
+				    changeMenuItem("M", "enabled", false);
+				}
+				
+				_dsObserver.refreshedImp = function():void {
+					infoRodape();
+					salvarEstadoTela();
+					_carregouBarraTotalizadores = true;
+				};
+				
+				_dsObserver.dataModifiedImp = function(fieldID:String):void {
+					if(fieldID == "CODMOEDA"){
+						if(_dsFinanceiro.getFieldValueAsNumber("CODMOEDA") > 0){
+							var codMoeda:String = 	_dsFinanceiro.getFieldValueAsString("CODMOEDA");
+							ServiceProxy.callService(
+								"mge@crud.find",
+								<entity name="CotacaoMoeda" orderby={"DTMOV DESC"}>
+									<literalCriteria><expression>{"CODMOEDA = " + codMoeda}</expression></literalCriteria>
+									<fields>
+										<field name="COTACAO" />
+									</fields>
+								</entity>,
+								function(params:*, response:XML):void{
+									var moeda:XML = response.responseBody.entidades.entidade[0] as XML;
+				 					
+				 					if(moeda != null){			 						
+				 						_dsFinanceiro.setFieldValue("VLRMOEDA", Number(moeda.COTACAO));
+				 						if(_mostraValorMoeda){
+					 						showCotacaoMoedaPopup();
+				 						}
+			 						}
+								},
+								true
+							);
+						}
+					}
+				};
+				
+								
+				_dsFinanceiro.addObserver(_dsObserver);
+				_dsFinanceiro.addDBCriteriaProvider(this);
+				
+				_dsFinanceiro.beforePostAction = function(dataSet:DBDataSet):Boolean{
+					_dsFinanceiro.addTXProperty("mov.financeiro.edicao", "true");	
+					_dsFinanceiro.addTXProperty("validacao.metas.modo.financeiro", "true");		
+				
+					if(_dadosCopia != null){
+						if(_dadosCopia.duplicarRateio){
+							_dsFinanceiro.addTXProperty("Financeiro.duplicar.rateio", "true");
+						}
+						_dsFinanceiro.addTXProperty("Financeiro.old.NUFIN", _dadosCopia.nuFin);
+						_dsFinanceiro.addTXProperty("Financeiro.old.NOSSONUM", _dadosCopia.nossoNum);
+					}
+					
+					return true;
+				}
+				
+				_dsFinanceiro.beforeCopyAction = function(dataSet:DBDataSet):Boolean {
+
+					// ATENÇÃO: O código abaixo atrasa a cópia do registro, pois as
+					// informações que são necessárias, serão obtidas em outro momento
+					// (quando o servidor responder e o usuário confirmar).
+
+					// Caso os dados já tenham sido coletados, permite a cópia retornando "true".
+					if(_dadosCopia != null){
+						return true;
+					}
+
+					// Se a execução chegou até aqui, significa que não temos as informações.
+					// Fazemos a requisição e tratamos a resposta no callback.
+					var strNuFin:String = _dsFinanceiro.getFieldValueAsString("NUFIN");
+					var strNossoNum:String = _dsFinanceiro.getFieldValueAsString("NOSSONUM");
+					ServiceProxy.callService(
+						"MovimentacaoFinanceiraSP.existeRateio",
+						<fin nuFin={strNuFin}/>,
+						function(params:*, response:XML):void{
+							var cancelarDuplicar:String = response.responseBody.rateio.@cancelarDup;
+							if(cancelarDuplicar != null && cancelarDuplicar != "") {
+								MessageUtils.showError(MessageUtils.TITLE_ERROR, cancelarDuplicar);
+								return;
+							}
+
+							var existeRateio:Boolean = String(response.responseBody.rateio.@existe) == "true";
+							if(String(response.responseBody.rateio.@confirmar) == "true" && existeRateio) {
+							// quando o  parametro de confirmacao esta ativo
+
+								MessageUtils.confirm(
+									MessageUtils.TITLE_CONFIRMATION,
+									i18n('Financeiro:MovimentacaoFinanceira', 'messageDuplicarRateio'),
+									function():void {
+										_dadosCopia = {nuFin: strNuFin, duplicarRateio: true, nossoNum: strNossoNum};
+										_dsFinanceiro.copyCurrentRow();
+									},
+									function():void {
+										_dadosCopia = {nuFin: strNuFin, duplicarRateio: false, nossoNum: strNossoNum};
+										_dsFinanceiro.copyCurrentRow();
+										}
+									);
+							} else {
+							//faz a duplicação imediatamente.
+
+								_dadosCopia = {nuFin: strNuFin, duplicarRateio: existeRateio, nossoNum: strNossoNum};
+								_dsFinanceiro.copyCurrentRow();
+							}
+						},
+						true
+					);
+					// Retornamos "false" para impedir que o dataset entre em modo cópia neste momento.
+					// Na resposta do servidor, dependendo dos parâmetros, colocamos novamente em modo cópia.
+					return false;
+				};
+				
+				_dsFinanceiro.afterCopyAction = function(dataSet:DBDataSet):Boolean {
+					var text:String = MGEParameters.asString("mgefin.aplica.valor.default.quando.duplicarregistro.grade");
+					if (text != null && text.indexOf(";") > 0) {
+						var campos:Array = text.split(";");
+						for each (var campo:String in campos) { 
+							if (campo.length > 0) {
+								_dsFinanceiro.setFieldValue(campo, null);
+							}
+						}
+					}
+					return true;
+				}
+
+				_dsFinanceiro.beforeDeleteAction = function(dataSet:DBDataSet):Boolean {
+					if (!_validouExclusao) {
+						var nuFin:Number = Number(_dsFinanceiro.getFieldValue("NUFIN"));
+
+						ServiceProxy.callService("MovimentacaoFinanceiraSP.validarExclusao", <fin nuFin={nuFin}/>,
+							function(params:*, response:XML):void {
+								// Mensagem de BPO
+								if (response.responseBody.hasOwnProperty("msgBPO")) {
+									_msgBPO = response.responseBody.msgBPO;
+								} else {
+									_msgBPO = null;
+								}
+
+								// Mensagem de validação de cheque
+								if (response.responseBody.hasOwnProperty("msgDevCheque")) {
+									_msgDevCheque = response.responseBody.msgDevCheque;
+								} else {
+									_msgDevCheque = null;
+								}
+
+								// flag informando que a validação já foi realizada
+								_validouExclusao = true;
+
+								_dsFinanceiro.unconditionalRemoveCurrentRecord();
+							}, true);
+
+						return false;
+					}
+
+					if (_msgBPO != null) {
+						var msgBPO:String = _msgBPO;
+						_msgBPO = null;
+						MessageUtils.confirm(i18n('Financeiro:MovimentacaoFinanceira', 'msgtitleConfirmacaoExclusao'), msgBPO,
+							function():void {
+								_dsFinanceiro.addTXProperty(PODEEXCLUIR_BPO, "S");
+								_dsFinanceiro.unconditionalRemoveCurrentRecord();
+							},
+							function():void {
+								_validouExclusao = false;
+							});
+						return false;
+					}
+
+					if (_msgDevCheque != null) {
+						var msgDevCheque:String = _msgDevCheque;
+						_msgDevCheque = null;
+						MessageUtils.confirm(i18n('Financeiro:MovimentacaoFinanceira', 'msgtitleConfirmacaoExclusao'), msgDevCheque,
+							function():void {
+								_dsFinanceiro.addTXProperty(PODEEXCLUIR_DEVCHEQUE, "S");
+								_dsFinanceiro.unconditionalRemoveCurrentRecord();
+							},
+							function():void {
+								_validouExclusao = false;
+							});
+						return false;
+					}
+
+					_validouExclusao = false;
+					return true;
+				};
+				
+				/*_dsFinanceiro.addEventListener(DBDataSetEvent.EVENT_RECORD_EDITED,
+					function():void {
+		                var origem:String = (_dsFinanceiro == null) ? "" : _dsFinanceiro.getFieldValueAsString("ORIGEM");
+
+						if(origem == "E") {
+							if(!podeAlterar) {
+								_dsFinanceiro.cancelEdition();
+								MessageUtils.showAlert("Lançamento com origem na Central", "Conforme parâmetro, lançamento com origem na Central não pode ser alterado!");
+							}
+						}
+					});*/
+
+		    	_dsFinanceiro.addEventListener(DBDataSetEvent.EVENT_EDITION_STARTED, function(e:DBDataSetEvent):void {
+			    	verificaAcessoBotoesContexto(true);
+		    	});
+			}
+
+			public function aplicarFiltro():void{
+				_dsFinanceiro.refresh();
+				atualizaValoresBarraTotalizadores(null);
+			}
+
+			public function isCriteriaProviderLoaded(callThisOnLoad:Function):Boolean{
+				if (!_staticFilterLoaded) {
+					_afterLoadFilter = callThisOnLoad;
+				}
+				return _staticFilterLoaded;
+			}
+
+			public function getCriteria():IDBCriteria{
+				var dbCriteria:DBCriteria = new DBCriteria();
+				var exp:String = "";
+				var par:Array = new Array();
+				
+                if (_nunotaToLoad != null) {
+                   dbCriteria = getCriteriaByNunota();
+                   _nunotaToLoad = null;
+                   return dbCriteria;
+                }
+                
+                if(nroUnico.text != ""){
+					exp = " this.NUFIN = ?";
+					exp += " AND this.RECDESP IN(1, -1)";
+					par.push(new DBCriteriaParameter("S", nroUnico.text));
+				} else {
+					if(chkReceita.selected && chkDespesa.selected) {
+						exp = "this.RECDESP IN(1, -1) ";
+					}else if(chkReceita.selected) {
+						exp = "this.RECDESP = 1 ";
+	     			}else if(chkDespesa.selected) {
+	     				exp = "this.RECDESP = -1 ";
+	     			}else if(!chkReceita.selected && !chkDespesa.selected){
+	     				exp = "this.RECDESP NOT IN(0, 1, -1) ";
+	     			}
+	     			
+	                if (! StringUtils.isEmpty(nroPedido.text)) {
+	                	if(exp != ""){
+	                		exp += " AND ";
+	                	}
+	                	
+	                	exp += " (this.NUPED = ? OR EXISTS(SELECT 1 FROM TGFVAR V INNER JOIN TGFCAB C ON(C.NUNOTA = V.NUNOTAORIG) WHERE V.NUNOTA = this.NUNOTA AND C.NUNOTA = ?))";
+	                	
+						par.push(new DBCriteriaParameter("N", nroPedido.text));
+						par.push(new DBCriteriaParameter("N", nroPedido.text));
+	                }
+
+					if(chkReal.selected && chkProvisao.selected) {
+						if(exp == "") {
+							exp = " this.PROVISAO IN('N','S') ";
+						} else {
+							exp = exp + "AND this.PROVISAO IN('N','S') ";
+						}
+	     			} else if(chkReal.selected) {
+						if(exp == "") {
+							exp = " this.PROVISAO = 'N' ";
+						} else {
+							exp = exp + "AND this.PROVISAO = 'N' ";
+						}
+	     			} else if(chkProvisao.selected) {
+	     				if(exp == "") {
+	     					exp = " this.PROVISAO = 'S' ";
+	     				} else {
+	     					exp = exp + "AND this.PROVISAO = 'S' ";
+	     				}
+	    			}
+
+					if(chkPendente.selected && chkBaixado.selected) {
+						if(exp == "") {
+							exp = "(this.DHBAIXA IS NOT NULL OR this.DHBAIXA IS NULL) "
+						} else {
+							exp = exp + "AND (this.DHBAIXA IS NOT NULL OR this.DHBAIXA IS NULL) "
+						}
+	    			} else if(chkPendente.selected) {
+						if(exp == "") {
+							exp = " this.DHBAIXA IS NULL ";
+						} else {
+							exp = exp + "AND this.DHBAIXA IS NULL ";
+						}
+	     			} else if(chkBaixado.selected) {
+	     				if(exp == "") {
+	     					exp = " this.DHBAIXA IS NOT NULL ";
+	     				} else {
+	     					exp = exp + "AND this.DHBAIXA IS NOT NULL ";
+	     				}
+	     			}
+
+	     			if(pesqParc.value != "") {
+	     				if(exp == "") {
+	     					exp = " this.CODPARC = ? ";
+	     				} else {
+	     					exp = exp + "AND this.CODPARC = ? ";
+	     				}
+	     				par.push(new DBCriteriaParameter("N", pesqParc.value));
+	     			}
+
+					if(edNroNota.text != "") {
+						if(exp == "") {
+							exp = " this.NUMNOTA = ? ";
+						} else {
+							exp = exp + "AND this.NUMNOTA = ? ";
+						}
+						par.push(new DBCriteriaParameter("S", edNroNota.text));
+					}
+
+					if(dtVencIni.text != "") {
+						if(exp == "") {
+							exp = " onlyDate(this.DTVENC) >= onlyDate(?) ";
+						} else {
+							exp = exp + "AND onlyDate(this.DTVENC) >= onlyDate(?) ";
+						}
+						par.push(new DBCriteriaParameter("D", dtVencIni.text));
+					}
+
+					if(dtVencFim.text != "") {
+						if(exp == "") {
+							exp = " onlyDate(this.DTVENC) <= onlyDate(?) ";
+						} else {
+							exp = exp + "AND onlyDate(this.DTVENC) <= onlyDate(?) ";
+						}
+						par.push(new DBCriteriaParameter("D", dtVencFim.text));
+					}
+				}
+
+				if(exp != "") {
+					exp+= " AND";
+				}
+
+				// Não pode trazer as provisões baixadas
+				exp += " NOT (this.PROVISAO = 'S' AND this.DHBAIXA IS NOT NULL AND this.ORIGEM = 'E')";
+
+                dbCriteria.expression = exp;
+				dbCriteria.parameters = par;
+				desabilitaCpEstoque();
+    			return dbCriteria;
+			}
+
+			private function atualizaValoresBarraTotalizadores(e:Event):void{
+				if(_dsFinanceiro.records.length > 0 || !_dsFinanceiro){
+					var totalReceita:Number = new Number();
+					var totalDespesa:Number = new Number();
+					var totalBaixado:Number = new Number();
+					var totalRecDesp:Number = new Number();
+					var totalAberto:Number = new Number();
+					
+					for each(var record:Object in _dsFinanceiro.records){
+						if (record.RECDESP == -1){
+							totalDespesa +=  NumberUtils.stringToNumber(record.VLRDESDOB);
+						} else if (record.RECDESP == 1){
+							totalReceita += NumberUtils.stringToNumber(record.VLRDESDOB);						
+						}
+						
+						if(record.DHBAIXA != null){
+							totalBaixado += NumberUtils.stringToNumber(record.VLRBAIXA);
+						}else{
+							totalAberto += NumberUtils.stringToNumber(record.VLRDESDOB);
+						}
+					}
+					lblVlrRec.text = NumberUtils.numberToString(totalReceita);
+					lblVlrDesp.text = NumberUtils.numberToString(totalDespesa);
+					lblVlrRecDesp.text = NumberUtils.numberToString(totalReceita - totalDespesa);
+					lblVlrTotBaixado.text = NumberUtils.numberToString(totalBaixado);
+					lblVlrTotAberto.text = NumberUtils.numberToString(totalAberto);
+					
+				} else {
+					lblVlrRec.text = "0,00";
+					lblVlrDesp.text = "0,00";
+					lblVlrRecDesp.text = "0,00";
+					lblVlrTotBaixado.text = "0,00";
+					lblVlrTotAberto.text = "0,00";
+				}
+				
+				lblVlrRec.setStyle("color", SaldoRenderer.BLUE);
+				lblVlrTotBaixado.setStyle( "color" , SaldoRenderer.BLUE );
+				lblVlrDesp.setStyle( "color" , 	SaldoRenderer.RED );
+				lblVlrTotAberto.setStyle( "color" , 	SaldoRenderer.RED );
+				
+				if(totalReceita - totalDespesa >= 0  ){
+					lblVlrRecDesp.setStyle( "color" , SaldoRenderer.BLUE );
+				}else{
+					lblVlrRecDesp.setStyle( "color" , SaldoRenderer.RED );
+				}
+
+			}	
+
+			private function carregarEstadoTela():void{
+				_staticFilterLoaded = false;
+
+				ServiceProxy.callService(
+					"mge@SystemUtilsSP.getConf",
+					<config chave={getApplicationResourceID() + "_estado"} tipo="T"/>,
+					function(params:*, response:XML):void{
+						if(response.responseBody.children().length() > 0){
+							var estadoTela:XMLList = response.responseBody.config.estadoTela;
+                            edNroNota.text = estadoTela.@nroNota.toString();
+                            nroUnico.text = estadoTela.@nroUnico.toString();
+							chkDespesa.selected = estadoTela.@chkDesp == "S";
+							chkReceita.selected = estadoTela.@chkRec == "S";
+                            chkReal.selected = estadoTela.@chkReal == "S";
+                            chkProvisao.selected = estadoTela.@chkProv == "S";
+                            chkPendente.selected = estadoTela.@chkPend == "S";
+                            chkBaixado.selected = estadoTela.@chkBaix == "S";
+							vctoIni = estadoTela.@datIni.toString();
+							vctoFim = estadoTela.@datFim.toString();
+                            intervaloVencimento = estadoTela.@interVcto.toString();
+                            ultimos = estadoTela.@ulti.toString();
+                            proximos = estadoTela.@prox.toString();
+                            corDespesa = estadoTela.hasOwnProperty("@corDesp") ? estadoTela.@corDesp.toString() :  corDespesa;
+                            corReceita = estadoTela.hasOwnProperty("@corRec") ? estadoTela.@corRec.toString() : corReceita;
+                            FiltrosMovFinanceiro.panelCompacted = estadoTela.hasOwnProperty("@painel") ? estadoTela.@painel.toString() == "S" :  false;
+						} else {
+							// Dois checks na vertical, não podem ficar desmarcados ao mesmo tempo
+							chkDespesa.selected = true;
+							chkReceita.selected = true;
+                            chkReal.selected = true;
+                            chkProvisao.selected = true;
+                            chkPendente.selected = true;
+                            chkBaixado.selected = true;
+						}
+						preencheDataVencimento();
+					},
+					true
+				);
+				
+				ServiceProxy.callService(
+					"mge@SystemUtilsSP.getAcessosCadastroUsuario",
+					<usuario usuariologado="true"/>,
+					function(ignored:*, result:XML):void{
+
+						var acessos:String = result.responseBody.acessos.@controle.toString();
+
+						_inibeAcessoReceitas = (acessos.indexOf(SIGLA_CONTROLE_INIBE_RECEITAS) >= 0);
+						_inibeAcessoDespesas = (acessos.indexOf(SIGLA_CONTROLE_INIBE_DESPESAS) >= 0);
+						
+						chkDespesa.enabled = !_inibeAcessoDespesas;
+						chkReceita.enabled = !_inibeAcessoReceitas;
+						
+						if(_inibeAcessoDespesas || _inibeAcessoReceitas){
+							chkDespesa.selected = !_inibeAcessoDespesas;
+							chkReceita.selected = !_inibeAcessoReceitas;
+						}
+					},
+					true
+				);
+
+			}
+
+			private function preencheDataVencimento():void {
+				if(intervaloVencimento == NENHUM || intervaloVencimento == "") {
+					if(vctoIni != null && vctoIni != "") {
+						dtVencIni.text = vctoIni;
+					}
+					if(vctoFim != null && vctoFim != "") {
+						dtVencFim.text = vctoFim;
+					}
+
+					loadFilterComplete();
+				} else if(intervaloVencimento == TUDO) {
+					dtVencIni.text = "";
+					dtVencFim.text = "";
+
+					loadFilterComplete();
+				} else {
+					var currentDate:Date = new Date();
+					switch(intervaloVencimento) {
+						case HOJE:
+							dtVencIni.text = DateUtil.dateFormat(currentDate);
+							dtVencFim.text = DateUtil.dateFormat(currentDate);
+						break;
+
+						case SEMANA_CORRENTE:
+							var primeiroDiaSemana:Date = new Date(currentDate);
+							primeiroDiaSemana.setDate(currentDate.getDate() - currentDate.getDay());
+							var ultimoDiaSemana:Date = new Date(currentDate);
+							ultimoDiaSemana.setDate(currentDate.getDate() - currentDate.getDay() + 6);
+
+							dtVencIni.text = DateUtil.dateFormat(primeiroDiaSemana);
+							dtVencFim.text = DateUtil.dateFormat(ultimoDiaSemana);
+						break;
+
+						case MES_CORRENTE:
+							var primeiroDiaMes:Date = new Date(currentDate);
+							primeiroDiaMes.setDate(1);
+							var ultimoDiaMes:Date = new Date(currentDate);
+							ultimoDiaMes.setMonth(currentDate.getMonth() + 1, 1);
+							ultimoDiaMes.setDate(ultimoDiaMes.getDate() - 1);
+
+							dtVencIni.text = DateUtil.dateFormat(primeiroDiaMes);
+							dtVencFim.text = DateUtil.dateFormat(ultimoDiaMes);
+						break;
+
+						case PERSONALIZADO:
+							var primeiroDia:Date = new Date(currentDate);
+							primeiroDia.setDate(currentDate.getDate() - ultimos);
+							var ultimoDia:Date = new Date(currentDate);
+							ultimoDia.setDate(currentDate.getDate() + proximos);
+
+							dtVencIni.text = DateUtil.dateFormat(primeiroDia);
+							dtVencFim.text = DateUtil.dateFormat(ultimoDia);
+						break;
+
+						default:
+							throw new Error(i18n('Financeiro:MovimentacaoFinanceira', 'messageImpossivelPreencherVencimento'));
+						break;
+					}
+
+					loadFilterComplete();
+				}
+			}
+
+			private function loadFilterComplete():void {
+				_staticFilterLoaded = true;
+				if(_afterLoadFilter != null){
+					_afterLoadFilter();
+				}
+			}
+
+			private function salvarEstadoTela():void{
+				var estado:XML = <config chave={getApplicationResourceID() + "_estado"} tipo="T">
+					                 <estadoTela
+					                 	chkDesp={chkDespesa.selected ? "S" : "N"}
+					                 	chkRec= {chkReceita.selected ? "S" : "N"}
+					                 	chkReal={chkReal.selected ? "S" : "N"}
+					                 	chkProv={chkProvisao.selected ? "S" : "N"}
+					                 	chkPend={chkPendente.selected ? "S" : "N"}
+					                 	chkBaix={chkBaixado.selected ? "S" : "N"}
+										nroNota={edNroNota.text}
+										nroUnico={nroUnico.text}
+					                 	datIni={dtVencIni.text}
+					                 	datFim={dtVencFim.text}
+										interVcto={intervaloVencimento}
+										ulti={ultimos}
+										prox={proximos}
+										corRec={corReceita}
+										corDesp={corDespesa}
+										painel={FiltrosMovFinanceiro.isPanelCompacted() ? "S" : "N"}/>
+								 </config>;
+
+				ServiceProxy.callService(
+					"mge@SystemUtilsSP.saveConf",
+					estado,
+					function(params:*, response:XML):void {
+						// Força a repintura do grid para que a cor selecionada nas preferências seja aplicada
+						dynaformFinanceiro.dataGrid.invalidateDisplayList();
+						dynaformFinanceiro.dataGrid.invalidateList();
+						dynaformFinanceiro.dataGrid.invalidateProperties();
+						dynaformFinanceiro.dataGrid.invalidateSize();
+						dynaformFinanceiro.dataGrid.validateNow();
+					},
+					true
+				);
+			}
+
+		    private function iniMovFin():void {
+		    	var chegouRespostaServicoParametro:Boolean = false;
+		    	var chegouRespostaServicoAcessoReneg:Boolean = false;
+		    	
+		    	var popupParent:DisplayObject = this;
+		    	
+		    	_cadastroParceiroSimplificado = null;
+		    	
+		    	_mostraValorMoeda =  MGEParameters.asBoolean("fin.mostra.valor.moeda.financeiro");
+		    	
+		    	bindKey(new KeySequence(String("F").charCodeAt(0),true,true),openFichaParc);
+		    	
+		    	bindKey(new KeySequence(Keyboard.F2), function():void{
+	    			if(_cadastroParceiroSimplificado == null ){
+		    			_cadastroParceiroSimplificado = new CadastroParceiroSimplificado();
+			    		_cadastroParceiroSimplificado.resourceIDTelaPai = getApplicationResourceID();
+			    		_cadastroParceiroSimplificado.onUsarParceiroAction = function(codigoParceiro:Object,nomeParceiro:Object):void{
+			    			if(_dsFinanceiro != null && (_dsFinanceiro.isInsertionMode() || _dsFinanceiro.getCurrentIndex() > -1) ){
+				    			_dsFinanceiro.setFieldValue("CODPARC", codigoParceiro);
+				    			_dsFinanceiro.setFieldValue("Parceiro_NOMEPARC", nomeParceiro );
+			    			} else {
+				    			MessageUtils.showError(MessageUtils.TITLE_ERROR,i18n('Financeiro:MovimentacaoFinanceira', 'messageFaltaRegistro')); 
+			    			}
+			    		};
+	    			}
+						
+					_cadastroParceiroSimplificado.show(_dsFinanceiro.getFieldValue("CODPARC"),popupParent);
+		    	});
+
+		    	dynaformFinanceiro.addEventListener(Dynaform.METADATA_UPDATED, function():void {
+		    		var dataGrid:DBDataGrid = dynaformFinanceiro.dataGrid;
+		    		
+		    		dataGrid.addEventListener(DBDataGrid.COLUMNS_CREATED, function():void {
+			    		for each(var column:DataGridColumn in dataGrid.columns) {
+			    			column.itemRenderer = gridLines;
+			    		}
+		    		});
+		    		
+					//podeBaixar   = dynaformFinanceiro.hasAccess("Baixa");
+					
+		    		podeRatear   = dynaformFinanceiro.hasAccess("Rateio");
+					if(chegouRespostaServicoParametro && chegouRespostaServicoAcessoReneg){
+			    		podeParcelar = podeParcelar && dynaformFinanceiro.hasAccess("Parcelar");
+						carregarEstadoTela();
+						verificaAcessoBotoesContexto();
+					}
+				});
+				
+				buildMenuOutrasOpcoes();
+				
+				dynaformFinanceiro.loadMetadata();
+
+	    		var paramParcelamentoName:String = "pemite.parcelamento.tela.fin";
+	    		var paramAlteraFinName:String = "altera.fin.origem.central";
+	    		var paramCalculoJuroObrigatorio:String = "calculo.juro.obrigatorio";
+	    		var paramBaixarDevolucaoChequeVariosTitulos:String = "baixar.devolucao.cheque.varios.titulos";
+	    		var paramPermiteEstornoSemRecomposicao:String = "fin.estorno.recomposicao.opcional";
+	    		var paramUsaLibBxPagDig:String = "com.usa.liberacao.baixa.valores.pagos.digitados";
+	    		var paramDescricaoDespCart:String = "fin.descricao.despesas.cartorio";
+	    		var paramHabilitaEquifax:String = "core.habilita.equifax";
+	    		var paramUtilizaEmpresaRecebimento:String = "fin.uti.empresa.unica.recebimento";
+	    		var paramPermiteDuplicarFinanceiro:String = "mge.fin.permite.duplicar.financeiro";
+	    		var paramUtilizaNroPedidoFinanceiro:String = "mge.fin.utiliza.nro.pedido.financeiro";
+
+				ServiceProxy.callService(
+		    		"mge@SystemUtilsSP.getParameters",
+		    		<params>
+		    			<param group="mge.fin" name={paramParcelamentoName}/>
+		    			<param group="mge.fin" name={paramAlteraFinName}/>
+		    			<param group="mge.fin" name={paramCalculoJuroObrigatorio}/>
+		    			<param group="mge.fin" name={paramBaixarDevolucaoChequeVariosTitulos}/>
+		    			<param name={paramPermiteEstornoSemRecomposicao}/>
+		    			<param name={paramUsaLibBxPagDig}/>
+		    			<param name={paramDescricaoDespCart}/>
+		    			<param name={paramHabilitaEquifax}/>
+		    			<param name={paramUtilizaEmpresaRecebimento}/>
+		    			<param name={paramPermiteDuplicarFinanceiro}/>
+		    			<param name={paramUtilizaNroPedidoFinanceiro}/>
+		    		</params>,
+					function(params:*, response:XML):void {
+						for each(var param:XML in response.responseBody.params.param){
+							var paramName:String = param.@name.toString();
+							var paramValue:String = param.@value.toString();
+							if(paramName == paramParcelamentoName){
+								podeParcelar = paramValue == "true";
+							} else if(paramName == paramAlteraFinName){
+								podeAlterar = paramValue == "true";
+							} else if(paramName == paramCalculoJuroObrigatorio) {
+								juroObrig = paramValue == "true";
+							} else if(paramName == paramBaixarDevolucaoChequeVariosTitulos) {
+							    baixarDevChequeVariosTitulos = paramValue == "true";
+							} else if(paramName == paramPermiteEstornoSemRecomposicao) {
+							    _paramPermiteEstornoSemRecomposicao = paramValue == "true";
+							} else if(paramName == paramUsaLibBxPagDig) {
+							    _paramUsaLibBxPagDig = paramValue == "true";
+							} else if(paramName == paramDescricaoDespCart){
+								_descricaoDespCart = StringUtils.emptyAsNull(paramValue);
+							} else if(paramName == paramHabilitaEquifax){
+								_equifaxDisponivel = paramValue == "true";
+							}else if(paramName == paramUtilizaEmpresaRecebimento){
+								_utilizaEmpresaRecebimento = paramValue == "true";
+							}else if(paramName == paramPermiteDuplicarFinanceiro){
+								_paramPermiteDuplicarFinanceiro = paramValue == "true";
+							}else if(paramName == paramUtilizaNroPedidoFinanceiro){
+								_paramUtilizaNroPedidoFinanceiro = paramValue == "true";
+								changeMenuItem("A", "enabled", _paramUtilizaNroPedidoFinanceiro);
+							}
+						}
+						
+						chegouRespostaServicoParametro = true;
+						if(dynaformFinanceiro.isLoaded() && chegouRespostaServicoAcessoReneg){
+							podeParcelar = podeParcelar && dynaformFinanceiro.hasAccess("Parcelar");
+							carregarEstadoTela();
+							verificaAcessoBotoesContexto();
+						}
+					},
+					true
+				);
+
+				//pega autorizações da tela de renegociação
+	    		var renegAuthorization:MGEAuthorization = new MGEAuthorization();
+	    		renegAuthorization.resourceID = "br.com.sankhya.fin.cad.renegociacaoTitulos";
+	    		renegAuthorization.callbackFunction = function():void {
+	    			podeRenegociar = renegAuthorization.hasAuthorization(MGEAuthorizationData.ACCESS_CONTROL_SHOW);
+					chegouRespostaServicoAcessoReneg = true;
+
+					if(dynaformFinanceiro.isLoaded() && chegouRespostaServicoParametro){
+						podeParcelar = podeParcelar && dynaformFinanceiro.hasAccess("Parcelar");
+		    			carregarEstadoTela();
+						verificaAcessoBotoesContexto();
+					}
+	    		}
+	    		
+	    		renegAuthorization.loadAuthorization();
+
+	    		ServiceProxy.addClientEvent(
+	    			"br.com.sankhya.mgefin.financeiro.LibLimite",
+	    			function(clientEvent:XML):void{
+	    				if(clientEvent.hasOwnProperty("liberacoes")){
+							if(_painelLiberacoes == null){
+								_painelLiberacoes = new PainelLiberacoes();
+							}
+
+	    					_painelLiberacoes.liberacoesXMLList = clientEvent.liberacoes.liberacao;
+	    					
+							PopUpManager.removePopUp(_painelLiberacoes);
+							
+							PopUpManager.addPopUp(_painelLiberacoes, Application.application as DisplayObject, true);
+							PopUpManager.centerPopUp(_painelLiberacoes);
+						}	
+	    			}
+	    		);
+
+	    		ServiceProxy.addClientEvent(
+	    			"br.com.sankhya.mgefin.avisa.validacao.numero.financeiro",
+	    			function(clientEvent:XML):void{
+	    				if(clientEvent.hasOwnProperty("response")){
+							MessageUtils.showAlert(MessageUtils.TITLE_WARNING, clientEvent.response.@mensagem);
+						}	
+	    			}
+	    		);
+
+	    		ServiceProxy.callService(
+					"mge@CaixaSP.getInformacoesCaixa",
+			        null,
+			        function(param:*, result:XML):void{
+						var infoCaixa:XML = result.responseBody[0] as XML;
+
+						if(infoCaixa != null){
+							if (infoCaixa.hasOwnProperty("@nuCaixa") && infoCaixa.hasOwnProperty("@codConta")) {
+								_usuarioEhCaixa = true;
+								_nuCaixa = Number(infoCaixa.@nuCaixa);
+								_contaCaixa = Number(infoCaixa.@codConta);
+							}
+						}
+			        },
+			        true
+			    );
+
+			    ServiceProxy.addClientEvent(
+	    			"br.com.sankhya.mgefin.solicitacao.liberacao.orcamento",
+	    			function(clientEvent:XML):void{
+	    				var solicLibOrcamento:PopUpSolicLibOrcamento = new PopUpSolicLibOrcamento();
+	    				solicLibOrcamento.dataValue = clientEvent;
+
+	    				var popUp:SanPopUp = SanPopUpManager.create("ID_POP_SOLIC_LIB_ORCAMENTO",
+								"Solicitação de Liberação de Orçamento",
+								solicLibOrcamento,
+								function(popUp:SanPopUp):void{
+									var data:Object = solicLibOrcamento.dataValue;
+
+									popUp.close();
+
+									_dsFinanceiro.addTXProperty("solicitacao.liberacao.orcamento.confirmada", "true");
+									_dsFinanceiro.addTXProperty("solicitacao.liberacao.orcamento.tipo", data["TIPO"]);
+									_dsFinanceiro.addTXProperty("solicitacao.liberacao.orcamento.obs", data["OBSERVACAO"]);
+
+									_dsFinanceiro.save();
+								},
+								function(popUp:SanPopUp):void{
+									solicLibOrcamento.rollback();
+								},
+								function(popUp:SanPopUp):void{
+									solicLibOrcamento.rollback();
+								});
+
+						popUp.show();
+	    			}
+	    		);
+
+				//Para totalizar a barra ao mudar o filtro das colunas
+	    		dynaformFinanceiro.addEventListener(Dynaform.METADATA_UPDATED, function(event:Event):void{
+    				dynaformFinanceiro.dataGrid.addEventListener(ConfigurableDataGrid.EVENT_REASSIGN_DATA_PROVIDER, atualizaValoresBarraTotalizadores);
+	    		});
+		    }
+		    	
+		    private function buildMenuOutrasOpcoes():void{
+		    	var menuDataProvider:Array = new Array();
+		    	
+		    	menuDataProvider.push({label: i18n('Financeiro:MovimentacaoFinanceira', 'itemImprimirCheque'), value: "I"});
+		    	menuDataProvider.push({label: i18n('Financeiro:MovimentacaoFinanceira', 'itemCMC7'),           value: "C"});
+		    	menuDataProvider.push({label: i18n('Financeiro:MovimentacaoFinanceira', 'itemOutrosImpostos'), value: "O"});
+		    	if(!isJivaW()){
+		    		menuDataProvider.push({type: "separator"});
+			    	menuDataProvider.push({label: i18n('Financeiro:MovimentacaoFinanceira', 'itemCotacaoMoedas'),  value: "M"});
+			    	if(_mostraValorMoeda){
+				    	menuDataProvider.push({label: i18n('Financeiro:MovimentacaoFinanceira', 'itemInformacaoMoeda'), value: "R"});
+			    	}
+			    	menuDataProvider.push({type: "separator"});
+		    	}
+		        menuDataProvider.push({label: i18n('Financeiro:MovimentacaoFinanceira', 'itemAgruparPartnerVencto'),  value: "A"});
+		    	
+			    var menuOutrasOpcoes:Menu = Menu.createMenu(this, menuDataProvider, false);
+				menuOutrasOpcoes.setStyle("textAlign", "left");
+				menuOutrasOpcoes.addEventListener(MenuEvent.ITEM_CLICK , opcaoSelecionada);
+				
+				popUpOutrasOpcoes.popUp = menuOutrasOpcoes;
+				
+				dynaformFinanceiro.optButton = popUpOutrasOpcoes;
+		    }
+
+		    private function changeMenuItem(data:String, attrib:String, value:*):void{
+				var popUpMenu:Menu = popUpOutrasOpcoes.popUp as Menu;
+				var dp:ArrayCollection = popUpMenu.dataProvider as ArrayCollection;
+				for each(var item:Object in dp){
+					if(item.value == data){
+						item[attrib] = value;
+						break;
+					}
+				}
+				popUpMenu.dataProvider = dp;
+		    }
+		    
+			private function verificaAcessoBotoesContexto(isRecordDirty:Boolean = false):void {
+				var isEmpty:Boolean = _dsFinanceiro == null || (_dsFinanceiro != null && _dsFinanceiro.isEmpty());
+
+                var recDespValido:Boolean = (_dsFinanceiro == null) ? false : _dsFinanceiro.getFieldValue("RECDESP") != 0;
+                var temProvisao:Boolean = (_dsFinanceiro == null) ? false : _dsFinanceiro.getFieldValueAsString("PROVISAO") == "S";
+                var temDhBaixa:Boolean = (_dsFinanceiro == null) ? false : _dsFinanceiro.getFieldValue("DHBAIXA") != null;
+                var temNuReneg:Boolean = (_dsFinanceiro == null) ? false : _dsFinanceiro.getFieldValue("NURENEG") != null;
+                var pertenceAcertoCarga:Boolean = (_dsFinanceiro == null) ? false : _dsFinanceiro.getFieldValue("PERTENCEAC") == "S";
+                
+                if(_dsFinanceiro.getFieldValue("RECDESP") == 1){
+			    	podeBaixar = (dynaformFinanceiro.hasAccess("BaixaRec") || dynaformFinanceiro.hasAccess("Baixa"));
+			    	_podeEstornar = (dynaformFinanceiro.hasAccess("EstornoRec") || dynaformFinanceiro.hasAccess("Estorno"));
+			    }else if(_dsFinanceiro.getFieldValue("RECDESP") == -1){
+			    	podeBaixar = (dynaformFinanceiro.hasAccess("BaixaDesp") || dynaformFinanceiro.hasAccess("Baixa")); 
+			    	_podeEstornar = (dynaformFinanceiro.hasAccess("EstornoDes") || dynaformFinanceiro.hasAccess("Estorno"));
+			    }else{
+			    	podeBaixar = dynaformFinanceiro.hasAccess("Baixa");
+			    	_podeEstornar = dynaformFinanceiro.hasAccess("Estorno");
+			    }
+                
+				btnBaixar.enabled = !isEmpty && !isRecordDirty && podeBaixar && !temProvisao && recDespValido && !temDhBaixa && !pertenceAcertoCarga;
+				btnEstornar.enabled = !isEmpty && !isRecordDirty && temDhBaixa && _podeEstornar && !pertenceAcertoCarga;
+				btnRatear.enabled = !isEmpty && !isRecordDirty && podeRatear && !pertenceAcertoCarga;
+				btnParcelar.enabled = !isEmpty && !isRecordDirty && ((_dsFinanceiro == null) ? false : (_dsFinanceiro.getCurrentRow() != null && !temDhBaixa && !temNuReneg && podeParcelar));
+				btnRenegociar.enabled = !isEmpty && !isRecordDirty && podeRenegociar && temNuReneg;
+				btnEquifax.enabled = (_dsFinanceiro.getFieldValue("TipoTitulo.INFCMC7") == "S" && _dsFinanceiro.getFieldValue("CODBARRA") != null);
+			}
+
+			private function estornar():void {
+				var params:XML = <param nuFin={_dsFinanceiro.getFieldValue("NUFIN")} nuBco={_dsFinanceiro.getFieldValueAsString("NUBCO")} />;
+
+				ServiceProxy.callService(
+					"mgefin@EstornoUtilSP.verificarEstorno",
+					params,
+					function(params:*, response:XML):void {
+						var statusXML:XML = response.responseBody.status[0];
+
+						if(statusXML != null) {
+							var estornoPopUp:EstornoPopUp = new EstornoPopUp();
+							var status:Object = new Object();
+
+							status.baixaConj = "S" == statusXML.@baixaConj;
+							status.conciliado = "S" == statusXML.@conciliado;
+							status.recomposicao = "S" == statusXML.@recomposicao;
+							status.antecipacao = "S" == statusXML.@antecipacao;
+							status.nuorig = statusXML.@nufinorig;
+							
+							estornoPopUp.dsFinanceiro = _dsFinanceiro;
+							estornoPopUp.statusEstorno = status;
+							estornoPopUp.paramPermiteEstornoSemRecomposicao = _paramPermiteEstornoSemRecomposicao;
+							estornoPopUp.resourceID = getApplicationResourceID();
+
+							PopUpManager.addPopUp(estornoPopUp, application as DisplayObject, true);
+							PopUpManager.centerPopUp(estornoPopUp);
+						}
+					},
+					true
+				);
+			}
+
+			private function ratear():void{
+				if(_dsFinanceiro.getCurrentIndex() > -1){
+					var nuFin:String = _dsFinanceiro.getFieldValueAsString("NUFIN");
+					var nunota:String = _dsFinanceiro.getFieldValueAsString("NUNOTA");
+
+					var rateioPopUp:RateioPopUp = new RateioPopUp();
+
+					rateioPopUp.title = i18n('Commons:Rateio', 'titleRateandoTitulo') + nuFin;
+					rateioPopUp.nuFin = nuFin;
+					rateioPopUp.nunota = nunota;
+					rateioPopUp.origem = "F";
+					rateioPopUp.valorTotalDesdob = _dsFinanceiro.getFieldValue("VLRDESDOB") as Number;
+					rateioPopUp.codNat = _dsFinanceiro.getFieldValue("CODNAT") as Number;
+					rateioPopUp.codCenCus = _dsFinanceiro.getFieldValue("CODCENCUS") as Number;
+					rateioPopUp.codProj = _dsFinanceiro.getFieldValue("CODPROJ") as Number;
+					rateioPopUp.finishHandler = function():void{
+						_dsFinanceiro.refreshCurrentRow();
+					}
+
+					ResizeManager.enableResize(rateioPopUp, 200);
+					PopUpManager.addPopUp(rateioPopUp, this, true);
+					PopUpManager.centerPopUp(rateioPopUp);
+				}
+			}
+
+			private function renegociar():void{
+				openConsultaRenegociacao();
+			}
+
+			private function consultaEquifax():void{
+				var codigoBarra:String = _dsFinanceiro.getFieldValueAsString("CODBARRA");
+				var cmc7:String = codigoBarra.replace(/[^0-9]/g, "");
+				if(cmc7.length != 30){
+					MessageUtils.showAlert(i18n('Financeiro:MovimentacaoFinanceira', 'msgtitleConsultaEquifax'), i18n('Financeiro:MovimentacaoFinanceira', 'messageCodigoBarrasInvalido',[codigoBarra]));
+				} else {
+					var url:String = "/mge/equifax.chequemais";
+					url += "?CMC7=" + cmc7;
+					url += "&CGC_CPF=" +  _dsFinanceiro.getFieldValueAsString("Parceiro.CGC_CPF");
+					url += "&REQUESTTIME=" + (new Date().getTime());
+					var props:Object = HTMLPopup.buildPopUpProperties(500, 300, true);
+					props.scrollbars = "yes";
+					HTMLPopup.open(url, "PopUpChequeMaisEquifax", props);
+				}
+			}
+
+			private function parcelar():void{
+				var parcelamento:Parcelamento = new Parcelamento();
+
+				parcelamento.titulos = _dsFinanceiro.getFieldValueAsString("NUFIN");
+				parcelamento.vlrLiquido = _dsFinanceiro.getFieldValueAsNumber("VLRLIQUIDO");
+				parcelamento.save = true;
+				parcelamento.addEventListener(ParcelamentoEvent.PARCELAMENTO_CONCLUIDO, function(parcelamentoEvent:ParcelamentoEvent):void {
+
+					var classFactory:ClassFactory = ClassFactory(parcelamentoConcluido);
+					classFactory.properties = {callBackReaplicarFiltro: function(somenteGerados:Boolean):void{
+
+						if(somenteGerados){
+							var strTitulosParcelados:String = "";
+
+							for each(var row:XML in parcelamentoEvent.titulosParcelados){
+
+								if(strTitulosParcelados != ""){
+									strTitulosParcelados += ",";
+								}
+
+								strTitulosParcelados += row.@NUFIN;
+							}
+
+							_dsFinanceiro.refresh(new DBCriteria("this.NUFIN IN (" + strTitulosParcelados + ")"));
+						} else {
+							_dsFinanceiro.refresh();
+						}
+					}};
+
+					var popUp:TitleWindow = classFactory.newInstance();
+
+					PopUpManager.addPopUp(popUp, DisplayObject(application), true);
+					PopUpManager.centerPopUp(popUp);
+				});
+
+				PopUpManager.addPopUp(parcelamento, DisplayObject(application), true);
+				PopUpManager.centerPopUp(parcelamento);
+			}
+
+			private function infoRodape():void {
+				var dataAtual:Date = new Date();
+				var dataTitulo:Date = null;
+				var dataBaixa:Date = null;
+				var rateado:String = "N";
+
+				if(_dsFinanceiro != null) {
+					dataTitulo = _dsFinanceiro.getFieldValue("DTVENC") as Date;
+					dataBaixa = _dsFinanceiro.getFieldValue("DHBAIXA") as Date;
+					rateado = _dsFinanceiro.getFieldValue("RATEADO") as String;
+
+					if(_rateadoColor) {
+						if(rateado == "S") {
+							btnRatear.setStyle("themeColor", _rateadoColor);
+						}
+					}
+					if(_ratearColor) {
+						if(rateado == "N") {
+							btnRatear.setStyle("themeColor", _ratearColor);
+						}
+					}
+
+					btnRatear.label = i18n('Commons:Rateio', (rateado == "S") ? 'labelRateado' : 'buttonRatear');
+				}
+			}
+			
+			private function openFichaParc():void{
+				if (_dsFinanceiro.getCurrentIndex()>-1 || _dsFinanceiro.isInsertionMode()) {
+					var codParc: String = _dsFinanceiro.getFieldValueAsString("CODPARC");
+					
+					if (StringUtils.emptyAsNull(codParc) != null) {
+						DefaultSankhyaApplication.openApp("br.com.sankhya.com.cons.fichaParceiro", {CODPARC:codParc});
+					}
+				}
+			}
+
+			private function openPreferencias():void {
+				var preferenciasTW:TitleWindow = ClassFactory(preferencias).newInstance();
+
+				PopUpManager.addPopUp(preferenciasTW, DisplayObject(application), true);
+				PopUpManager.centerPopUp(preferenciasTW);
+			}
+
+			private function openConsultaRenegociacao():void {
+				var consultaRenegTW:TitleWindow = ClassFactory(consultaReneg).newInstance();
+
+				_nureneg = int(_dsFinanceiro.getFieldValueAsString("NURENEG"));
+				
+				if (_nureneg <= 0) {
+					MessageUtils.showAlert(MessageUtils.TITLE_WARNING, "Não existe nenhuma renegociação para este titulo.");
+					return;
+				}
+				PopUpManager.addPopUp(consultaRenegTW, DisplayObject(application), true);
+				PopUpManager.centerPopUp(consultaRenegTW);
+			}
+
+			public function salvarPreferencias(intervaloVencimento:String, ultimos:String, proximos:String, corDespesa:uint, corReceita:uint):void {
+				this.intervaloVencimento = intervaloVencimento;
+				this.ultimos = intervaloVencimento != PERSONALIZADO ? 0 : int(ultimos);
+				this.proximos = intervaloVencimento != PERSONALIZADO ? 0 : int(proximos);
+				this.corDespesa = corDespesa;
+				this.corReceita = corReceita;
+
+				preencheDataVencimento();
+				salvarEstadoTela();
+			}
+
+			public function buildField(source:XML, dataSet:IDBDataSet):UIComponent {
+				if(_dsFinanceiro == null){
+					_dsFinanceiro = dataSet as DBDataSet;
+				}
+
+				var fieldName:String = String(source[source.hasOwnProperty("@leftDataField") ? "@leftDataField" : "@dataField"]);
+				if(fieldName == "NUFIN") {
+					_nufin = new DBNumericInput();
+					_nufin.dataSet = dataSet;
+					_nufin.fieldName = fieldName;
+					_nufin.precision = 0;
+					_nufin.enabled = false;
+
+					return _nufin;
+				}
+
+				return null;
+			}
+
+			private function desabilitaCpEstoque():void{
+				var origem:String;
+
+				if(_dsFinanceiro.getFieldValue("ORIGEM")){
+					origem = _dsFinanceiro.getFieldValue("ORIGEM").toString();
+				}
+
+				if(origem == "E"){
+					if(_cpNumNota != null){
+						_cpNumNota.enabled = false;
+					}
+
+					if(_cpProvisao != null){
+						_cpProvisao.enabled = false;
+					}
+				}else{
+					if(_cpNumNota != null){
+						_cpNumNota.enabled = _estadoCpNumNota;
+					}
+
+					if(_cpProvisao != null){
+						_cpProvisao.enabled = _estadoCpProvisao;
+					}
+				}
+			}
+
+			//baixa
+			private function baixar():void{
+				var paramsBaixa:Object = new Object();
+
+				paramsBaixa["nuFin"] = _dsFinanceiro.getFieldValueAsNumber("NUFIN");
+				paramsBaixa["codTipTit"] = _dsFinanceiro.getFieldValueAsNumber("CODTIPTIT");
+				paramsBaixa["devCheque"] = baixarDevChequeVariosTitulos;
+				paramsBaixa["juroObrig"] = juroObrig;
+				paramsBaixa["usaLibBxPagDig"] = _paramUsaLibBxPagDig;
+				paramsBaixa["descricaoDespCart"] = _descricaoDespCart;
+				
+				if(_utilizaEmpresaRecebimento){
+					paramsBaixa["codEmpReadOnly"] = false;
+				}else{
+					paramsBaixa["codEmpReadOnly"] = true;
+				}
+
+				if (_usuarioEhCaixa) {
+					paramsBaixa["codContaBca"] = _contaCaixa;
+				}
+				
+				if(_popupCotacaoMoeda != null){
+					_popupCotacaoMoeda.close();	
+				}
+				
+				//Caso seja necessário incrementar essa função "baixar", faça dentro do "BaixaHelper".
+				BaixaHelper.prepararBaixa(
+					baixaPanel,
+					paramsBaixa, 
+					function():void{
+						vSFinanceiro.selectedIndex = 0;
+						
+						if(baixaPanel.opcao == 0) {
+							_dsFinanceiro.refreshCurrentRow();
+						} else if(baixaPanel.opcao == 1) {
+							_dsFinanceiro.refresh();
+						}
+					}
+				);
+			}
+
+			/*
+			implementacao da interface IGridPrinterParam
+			*/
+			public function extraColumns():ArrayCollection {
+				var columns:ArrayCollection =new ArrayCollection();
+				columns.addItem("RECDESP");
+				return columns;
+			}
+
+			public function getExtraParams():Object {
+				var params:Object = new Object();
+				params["gridPrinterCallBackClassName"] = "br.com.sankhya.mge.financeiro.utils.MovimentacaoFinanceiraGridPrinter";
+				//params["extraHeader"] = "Conta: " + pesqConta.value + " - " + pesqConta.descriptionInput;
+				return params;
+			}
+
+			private function checkPair(selectedCheckBox:CheckBox, pairCheckBox:CheckBox):void {
+				if (!selectedCheckBox.selected && !pairCheckBox.selected) {
+					pairCheckBox.selected = true;
+				}
+			}
+			
+			private function checkRecDesp(selectedCheckBox:CheckBox, pairCheckBox:CheckBox):void{
+				if(!_inibeAcessoDespesas && !_inibeAcessoReceitas){
+					pairCheckBox.selected = true;
+				}
+			}
+			
+			private function opcaoSelecionada(event:MenuEvent):void{
+				if( event.item.value == "I" ){
+					imprimirCheque();
+				} else if(event.item.value == "C"){
+					informarCmc7();
+				}else if(event.item.value == "O"){
+					editarOutrosImpostos();
+				}else if(event.item.value == "M"){
+					createPopUpCotacaoMoeda(_dsFinanceiro.getFieldValueAsString("CODMOEDA"));
+				}else if(event.item.value == "A"){
+					agruparTitulosPorVencimento();
+				}else if(event.item.value == "R"){
+					showCotacaoMoedaPopup();
+				}
+			}
+			
+			private function imprimirCheque():void{
+				if(dynaformFinanceiro.dataSet.getCurrentIndex() > -1){
+					var impressaoPopUp:ParametrosImpressaoPopUp = new ParametrosImpressaoPopUp();
+					
+					impressaoPopUp.titulo = dynaformFinanceiro.dataSet.getCurrentRow();
+					impressaoPopUp.contaBancariaDefault = dynaformFinanceiro.dataSet.getFieldValueAsNumber("CODCTABCOINT");
+					
+					PopUpManager.addPopUp( impressaoPopUp, this, true );
+					PopUpManager.centerPopUp(impressaoPopUp); 
+				}else{
+					MessageUtils.showAlert(MessageUtils.TITLE_WARNING , i18n('Financeiro:MovimentacaoFinanceira', 'messageSelecioneTitulo') );
+				}
+			}
+			
+			private function informarCmc7():void{
+				var codTipTit:Number = _dsFinanceiro.getFieldValueAsNumber("CODTIPTIT");
+
+				if(isNaN(codTipTit)){
+					MessageUtils.showAlert(MessageUtils.TITLE_WARNING, i18n('Financeiro:MovimentacaoFinanceira', 'messageFaltaTipoTitulo'));
+				} else{
+					ServiceProxy.callService(
+						"mge@BaixaFinanceiroSP.informarCMC7ParaTipoTitulo",
+						<param codTipTit={codTipTit}/>,
+						function(param:*, result:XML):void{
+	
+							if(result.responseBody.@informaCmc7 == "S" ){
+								var dataValue:Object = new Object();
+								dataValue.ehPopUpMovimentacaoFinan = true;
+								dataValue.codParc = _dsFinanceiro.getFieldValueAsNumber("CODPARC");
+		
+								var popUpCMC7:ISanDataControls = new CMC7Panel();
+								popUpCMC7.dataValue = dataValue;
+								
+								SanPopUpManager.create(
+									"ID_CMC7",
+									i18n('Financeiro:MovimentacaoFinanceira', 'titleValidaBandaCMC7'),
+									popUpCMC7,
+									function(popUp:SanPopUp):void{
+										if(popUp.content.dataValue.validateFields()){
+											_dsFinanceiro.setFieldValue("NOSSONUM", popUp.content.dataValue.numCheque);
+										    _dsFinanceiro.setFieldValue("CODBARRA", popUp.content.dataValue.strCMC7);
+									    	_dsFinanceiro.setFieldValueAsString("CODBCO_CMC7", popUp.content.dataValue.codBcoCMC7);
+									    	_dsFinanceiro.setFieldValue("AGENCIA_CMC7",popUp.content.dataValue.agenciaCMC7);
+									    	_dsFinanceiro.setFieldValue("CONTA_CMC7",popUp.content.dataValue.contaCMC7);
+									    	_dsFinanceiro.setFieldValue("CGC_CPF_CMC7",popUp.content.dataValue.cgcCpfCMC7);
+									    	_dsFinanceiro.setFieldValue("NOMEEMITENTE_CMC7",popUp.content.dataValue.nomeEmitenteCMC7);
+										     
+										    _dsFinanceiro.save();
+										    popUp.content.dataValue.salvarContaCliente(function():void{
+												popUp.close();
+											});
+										}
+									}).show();
+							} else{
+								MessageUtils.showAlert(MessageUtils.TITLE_WARNING, i18n('Financeiro:MovimentacaoFinanceira', 'messageTipoTituloSemCMC7', [_dsFinanceiro.getFieldValue("CODTIPTIT")]));
+							}
+						},
+						true
+					);
+				}
+			}
+			
+			private function showCotacaoMoedaPopup():void{
+				if(_popupCotacaoMoeda == null){
+					_popupCotacaoMoeda = new PopUpCotacaoMoeda();
+					_popupCotacaoMoeda.dsFinanceiro = _dsFinanceiro;
+				}
+				
+				_popupCotacaoMoeda.show();
+			}
+			
+			private function editarOutrosImpostos():void{
+				if(dynaformFinanceiro.dataSet.getCurrentIndex() < 0){
+					MessageUtils.showAlert(MessageUtils.TITLE_WARNING, i18n('Financeiro:MovimentacaoFinanceira', 'messageSelecioneTitulo'));
+					return;
+				}
+				
+				var numeroFinanceiro:Number = dynaformFinanceiro.dataSet.getFieldValueAsNumber("NUFIN");
+				
+				var id:String = getApplicationResourceID() + "." + OutrosImpostosPopUp.ID + "_" + numeroFinanceiro;
+				
+				var outrosImpostosPopUp:SanPopUp = SanPopUpManager.create(id,i18n('Commons:Impostos', 'labelOutrosImpostos'),new OutrosImpostosPopUp());
+				
+				var data:Object = { NUFIN:numeroFinanceiro, resourceID:id, baixado:(dynaformFinanceiro.dataSet.getFieldValue("DHBAIXA") != null)};
+				
+				outrosImpostosPopUp.okLabel = i18n('Geral', 'buttonFechar');
+				
+				outrosImpostosPopUp.okFunction = function(args:*):void{
+					outrosImpostosPopUp.close();
+				}
+				
+				outrosImpostosPopUp.showCancelBtn = false;
+				outrosImpostosPopUp.content.dataValue = data;
+				
+				outrosImpostosPopUp.show();
+			}
+			
+			private function createPopUpCotacaoMoeda(codMoeda:String):void{
+				var cotacaoMoeda:CotacaoMoedaPopUp = new CotacaoMoedaPopUp();
+			    cotacaoMoeda.dataValue = codMoeda;
+				
+				var sanPopup:SanPopUp = SanPopUpManager.create(
+					CotacaoMoedaPopUp.POPUP_ID,
+					i18n('Financeiro:MovimentacaoFinanceira', 'titleCotacaoMoeda'),
+					cotacaoMoeda,
+					function(popup:SanPopUp):void{
+					
+						popup.close();
+						
+					}
+				);
+				
+				sanPopup.cancelLabel = i18n('Geral', 'buttonFechar');
+				sanPopup.okAsDefaultButton = true;
+				sanPopup.show();
+				sanPopup.onCloseFunction = function(popUp:SanPopUp):void{
+					 DataSetsContainer.removeDataSet("DS_COTACAO_MOEDA");
+				};
+			}
+			private function doAgruparTitulosPorVencimento():void{
+				var financeiros:XML = <financeiros nroPedido={nroPedido.text}/>;
+				
+				for(var i:int = 0 ; i < _dsFinanceiro.records.length ; i++){
+					financeiros.appendChild(<NUFIN>{_dsFinanceiro.records[i]['NUFIN']}</NUFIN>);
+				}
+			
+			    ServiceProxy.callService(
+						"mgefin@MovimentacaoFinanceiraSP.agruparTitulosPorVencimento",
+						financeiros,
+						function(param:*, result:XML):void{
+							if (result.responseBody.hasOwnProperty("renegociacoes")) {
+								var popUpAgrupamentoFinanceiroResult:PopUpAgrupamentoFinanceiroResult = new PopUpAgrupamentoFinanceiroResult();
+								popUpAgrupamentoFinanceiroResult.dataValue = {renegociacoes: result.responseBody.renegociacoes.renegociacao, totalDesdob:  NumberUtils.stringToNumber(result.responseBody.renegociacoes.@totalDesdob) };
+				
+								var sanPopUp:SanPopUp = SanPopUpManager.create(
+									"ID_POP_UP_AGRUPAMENTO_FIN",
+									i18n('Financeiro:MovimentacaoFinanceira', 'titleResultadoAgrupamentoFinanceiros'),
+									popUpAgrupamentoFinanceiroResult,
+									function(popUp:SanPopUp):void{
+										popUp.close();
+										_dsFinanceiro.refresh();
+									});
+									
+								sanPopUp.okLabel = i18n('Geral', 'buttonFechar');
+								sanPopUp.showCancelBtn = false;
+				
+								sanPopUp.show();
+							
+							} else {
+							     MessageUtils.showAlert(MessageUtils.TITLE_INFORMATION,i18n('Financeiro:MovimentacaoFinanceira', 'msgNaoFoiGeradoAgrupamento'));
+							}
+						},
+						true
+					);
+
+			
+			}
+			
+			private function agruparTitulosPorVencimento():void{
+				var thisRef:DisplayObject = this;
+			
+			    if (_dsFinanceiro.size() <= 0) {
+					MessageUtils.showAlert(MessageUtils.TITLE_WARNING, i18n('Financeiro:MovimentacaoFinanceira', 'msgNaoHaFinanceiroParaAgrupar'));
+				   return;
+				}
+				var dataGrid:DBDataGrid = dynaformFinanceiro.dataGrid;
+				
+                var finsProvisionados:String = "";
+                var finsBaixados:String = "";
+				for each (var fin:Object in dataGrid.dataProvider){
+					if (fin.PROVISAO == "S"){
+					    finsProvisionados=fin.NUFIN;
+					    break;
+					}
+					if (fin.DHBAIXA != null){
+					    finsBaixados=fin.NUFIN;
+					    break;
+					}
+				
+				}
+				
+				if (finsProvisionados.length > 0) {
+				    MessageUtils.showError(MessageUtils.TITLE_ERROR,i18n('Financeiro:MovimentacaoFinanceira', 'msgExisteTituloProvisionado',[finsProvisionados]));
+				    return;
+				} 
+				
+				if (finsBaixados.length > 0) {
+				    MessageUtils.showError(MessageUtils.TITLE_ERROR,i18n('Financeiro:MovimentacaoFinanceira', 'msgExisteTituloBaixado',[finsBaixados]));
+				    return;
+				} 
+		
+		
+				MessageUtils.confirm(MessageUtils.TITLE_CONFIRMATION,i18n('Financeiro:MovimentacaoFinanceira', 'msgDesejaAgruparosTitulosSelecionadosGradeParceiroVencimento'),doAgruparTitulosPorVencimento);
+				
+			}
+			
+		]]>
+	</mx:Script>
+	<mx:Component id="parcelamentoConcluido">
+		<mx:TitleWindow width="300" height="120" showCloseButton="true" close="close()" horizontalAlign="center" title="Informação">
+			<mx:Script>
+				<![CDATA[
+					import mx.managers.PopUpManager;
+
+					private var _callBack:Function;
+
+					public function set callBackReaplicarFiltro(f:Function):void{
+						_callBack = f;
+					}
+
+					private function aplicarFiltro(somenteGerados:Boolean):void{
+						_callBack(somenteGerados);
+						close();
+					}
+
+					private function close():void{
+						PopUpManager.removePopUp(this);
+					}
+
+				]]>
+			</mx:Script>
+			<mx:Spacer height="10"/>
+			<mx:Text text="{resourceManager.getString('Financeiro:MovimentacaoFinanceira', 'messageSucessoParcelamento')}" fontSize="12" fontWeight="bold"/>
+			<mx:Text text="{resourceManager.getString('Financeiro:MovimentacaoFinanceira', 'messageDecisao')}" fontSize="12" fontWeight="bold"/>
+			<mx:HBox width="100%" horizontalAlign="center">
+				<mx:Button label="{resourceManager.getString('Financeiro:MovimentacaoFinanceira', 'lblMostrarGerados')}" click="aplicarFiltro(true)" buttonMode="true"/>
+				<mx:Button label="{resourceManager.getString('Financeiro:MovimentacaoFinanceira', 'lblReaplicarFiltro')}" click="aplicarFiltro(false)" buttonMode="true"/>
+			</mx:HBox>
+		</mx:TitleWindow>
+	</mx:Component>
+	
+	<mx:Component id="preferencias">
+		<mx:TitleWindow title="{resourceManager.getString('Financeiro:MovimentacaoFinanceira', 'titlePreferencias')}" width="410" height="320" showCloseButton="true" creationComplete="initPreferencias()">
+			<mx:Script>
+				<![CDATA[
+					import mx.controls.Menu;
+					import mx.containers.TitleWindow;
+					import mx.events.CloseEvent;
+					import mx.managers.PopUpManager;
+
+					private function initPreferencias():void {
+						TitleWindow(this).setFocus();
+						TitleWindow(this).addEventListener(CloseEvent.CLOSE, function(evt:CloseEvent):void {
+							closePopUp()
+						});
+						addEventListener(KeyboardEvent.KEY_DOWN, function(e:KeyboardEvent):void {
+							if(e.charCode == Keyboard.ESCAPE) {
+								closePopUp()
+							}
+						});
+					}
+
+					private function closePopUp():void {
+						PopUpManager.removePopUp(this);
+					}
+
+					private function salvar():void {
+						outerDocument.salvarPreferencias(intervalo.selectedValue.toString(), ultimos.value.toString(), proximos.value.toString(), colorDespesa.selectedColor, colorReceita.selectedColor);
+						closePopUp();
+					}
+				]]>
+			</mx:Script>
+			<mx:Form width="100%" height="100%">
+				<mx:FormItem label="{resourceManager.getString('Financeiro:MovimentacaoFinanceira', 'labelIntervaloVencimento')}:" direction="vertical">
+					<mx:RadioButtonGroup id="intervalo" selectedValue="{outerDocument.intervaloVencimento}"/>
+					<mx:RadioButton label="{resourceManager.getString('Financeiro:MovimentacaoFinanceira', 'labelUltimaDataUtilizada')}" value="{outerDocument.NENHUM}" group="{intervalo}"/>
+					<mx:RadioButton label="{resourceManager.getString('Financeiro:MovimentacaoFinanceira', 'labelHoje')}" value="{outerDocument.HOJE}" group="{intervalo}"/>
+					<mx:RadioButton label="{resourceManager.getString('Financeiro:MovimentacaoFinanceira', 'labelSemanaCorrente')}" value="{outerDocument.SEMANA_CORRENTE}" group="{intervalo}"/>
+					<mx:RadioButton label="{resourceManager.getString('Financeiro:MovimentacaoFinanceira', 'labelMesCorrente')}" value="{outerDocument.MES_CORRENTE}" group="{intervalo}"/>
+					<mx:RadioButton label="{resourceManager.getString('Financeiro:MovimentacaoFinanceira', 'labelLimparData')}" value="{outerDocument.TUDO}" group="{intervalo}"/>
+					<mx:RadioButton label="{resourceManager.getString('Financeiro:MovimentacaoFinanceira', 'labelPersonalizado')}" value="{outerDocument.PERSONALIZADO}" group="{intervalo}"/>
+					<mx:VBox enabled="{intervalo.selectedValue == &quot;P&quot;}" horizontalAlign="right" verticalAlign="middle">
+						<mx:FormItem label="{resourceManager.getString('Financeiro:MovimentacaoFinanceira', 'labelUltimo')}:" direction="horizontal">
+							<ui:DBNumericStepper id="ultimos" width="50" minimum="0" value="{outerDocument.ultimos}"/>
+							<mx:Label text="dia(s)"/>
+						</mx:FormItem>
+						<mx:FormItem label="{resourceManager.getString('Financeiro:MovimentacaoFinanceira', 'labelProximo')}:" direction="horizontal">
+							<ui:DBNumericStepper id="proximos" width="50" minimum="0" value="{outerDocument.proximos}"/>
+							<mx:Label text="dia(s)"/>
+						</mx:FormItem>
+					</mx:VBox>
+				</mx:FormItem>
+				<mx:FormItem label="{resourceManager.getString('Financeiro:MovimentacaoFinanceira', 'labelCorParaReceita')}:">
+					<mx:ColorPicker id="colorReceita" selectedColor="{outerDocument.corReceita}"/>
+				</mx:FormItem>
+				<mx:FormItem label="{resourceManager.getString('Financeiro:MovimentacaoFinanceira', 'labelCorParaDespesa')}:">
+					<mx:ColorPicker id="colorDespesa" selectedColor="{outerDocument.corDespesa}"/>
+				</mx:FormItem>
+			</mx:Form>
+			<mx:ControlBar horizontalAlign="right">
+				<mx:Button label="{resourceManager.getString('Geral', 'buttonCancelar')}" click="closePopUp()" buttonMode="true"/>
+				<mx:Button label="{resourceManager.getString('Geral', 'buttonSalvar')}" buttonMode="true" click="salvar()"/>
+			</mx:ControlBar>
+		</mx:TitleWindow>
+	</mx:Component>
+	<mx:Component id="consultaReneg">
+		<mx:TitleWindow title="{resourceManager.getString('Financeiro:MovimentacaoFinanceira', 'titleConsultaRenegociacao')}" width="750" height="500" 
+			showCloseButton="true" creationComplete="initConsultaReneg()" layout="vertical" paddingBottom="5" 
+			paddingLeft="5" paddingRight="5" paddingTop="5">
+			<mx:Script>
+				<![CDATA[
+					import mx.resources.ResourceManager;
+					import mx.events.FlexEvent;
+					import mx.events.DataGridEvent;
+					import br.com.sankhya.util.http.ServiceProxy;
+					import br.com.sankhya.controls.datagrid.ItemRendererColor;
+					import br.com.sankhya.db.DBObserverAdapter;
+					import br.com.sankhya.util.FormatterUtil;
+					import br.com.sankhya.util.NumberUtils;
+					import mx.controls.dataGridClasses.DataGridColumn;
+					import br.com.sankhya.db.DBCriteriaParameter;
+					import br.com.sankhya.db.DBCriteria;
+					import br.com.sankhya.db.IDBCriteria;
+					import mx.containers.TitleWindow;
+					import mx.events.CloseEvent;
+					import mx.managers.PopUpManager;
+
+					[Bindable] public var nureneg:int;
+					[Bindable] public var totalOriginal:Number;
+					[Bindable] public var totalRenegociado:Number;
+					public var corReceita:uint;
+					public var corDespesa:uint;
+
+					private function initConsultaReneg():void {
+						TitleWindow(this).addEventListener(CloseEvent.CLOSE, function(evt:CloseEvent):void {
+							closePopUp()
+						});
+						nureneg = int(outerDocument._nureneg);
+						corReceita = int(outerDocument.corReceita);
+						corDespesa = int(outerDocument.corDespesa);
+
+						loadReneg();
+					}
+					
+					private function loadReneg():void{
+						ServiceProxy.callService(
+						"MovimentacaoFinanceiraSP.getDadosParcelamento",
+						<param nuReneg={nureneg}/>,
+							function(params:*, response:XML):void{
+								gridRenegOrig.dataProvider = response.responseBody.info.origens.row;
+								gridResult.dataProvider = response.responseBody.info.results.row;
+								totalOriginal = response.responseBody.info.origens.@totalOrigem;
+								totalRenegociado = response.responseBody.info.results.@totalResult;
+							},
+							true
+						);
+					}
+
+					private function closePopUp():void {
+						PopUpManager.removePopUp(this);
+					}
+
+					private function formatTotal(item:Object, column:DataGridColumn):String {
+						return FormatterUtil.formatDecimal(NumberUtils.round(item[column.dataField], 2));
+					}
+
+					private function recDespLabelFunction(item:Object, column:DataGridColumn):String {
+						if(Number(item["RECDESP"]) == 0){
+							return ResourceManager.getInstance().getString('Financeiro:MovimentacaoFinanceira', 'headerRenegoc');
+						}else if(Number(item["RECDESP"]) == 1){
+							return ResourceManager.getInstance().getString('Financeiro:MovimentacaoFinanceira', 'headerReceitas');
+						}else{
+							return ResourceManager.getInstance().getString('Financeiro:MovimentacaoFinanceira', 'headerDespesas');
+						}
+					}
+
+					private function absFunction(item:Object, column:DataGridColumn):String{
+						return Math.abs(Number(item["NURENEG"])).toString();
+					}
+
+					private function gridOrigClicked():void{
+						var item:Object = gridRenegOrig.selectedItem;
+
+						if(item != null){
+							if(Number(item["NURENEGANT"]) != 0){
+								nureneg = Number(item["NURENEGANT"]);
+								loadReneg();
+							}
+						}
+					}
+
+					private function gridResultClicked():void{
+						var item:Object = gridResult.selectedItem;
+
+						if(item != null){
+							if(Number(item["NURENEGPOST"]) != 0){
+								nureneg = Number(item["NURENEGPOST"]);
+								loadReneg();
+							}
+						}
+					}
+				]]>
+			</mx:Script>
+
+			<mx:Component id="gridOrigLines">
+		    	<mx:Label width="100%">
+					<mx:Script>
+						<![CDATA[
+							override protected function updateDisplayList(unscaledWidth:Number, unscaledHeight:Number):void {
+								super.updateDisplayList(unscaledWidth, unscaledHeight);
+								if(Number(data["NURENEG"]) < 0 || Number(data["RECDESP"]) == -1) {
+									setStyle("color", outerDocument.corDespesa);
+								} else if(Number(data["NURENEG"]) > 0 || Number(data["RECDESP"]) == 1){
+									setStyle("color", outerDocument.corReceita);
+								}
+							}
+						]]>
+					</mx:Script>
+		    	</mx:Label>
+		    </mx:Component>
+			<mx:Component id="gridResultLines">
+		    	<mx:Label width="100%">
+					<mx:Script>
+						<![CDATA[
+							override protected function updateDisplayList(unscaledWidth:Number, unscaledHeight:Number):void {
+								super.updateDisplayList(unscaledWidth, unscaledHeight);
+		
+								if(Number(data["RECDESP"]) == 1) {
+									setStyle("color", outerDocument.corReceita);
+								} else if(Number(data["RECDESP"]) == -1){
+									setStyle("color", outerDocument.corDespesa);
+								}
+							}
+						]]>
+					</mx:Script>
+		    	</mx:Label>
+		    </mx:Component>
+			
+			<controls:GradienteBox width="100%" direction="horizontal" verticalAlign="middle">
+				<mx:HBox width="40%" verticalAlign="bottom">
+					<mx:Label text="{resourceManager.getString('Financeiro:MovimentacaoFinanceira', 'labelNumeroUnico')}:"/>
+					<mx:Label text="{outerDocument._nufin.getData()}" fontSize="14" fontWeight="bold"/>
+				</mx:HBox>
+				<mx:HBox width="30%" verticalAlign="bottom">
+					<mx:Label text="{resourceManager.getString('Financeiro:MovimentacaoFinanceira', 'labelTotalOriginal')}:"/>
+					<mx:Label text="{FormatterUtil.formatDecimal(totalOriginal)}" fontSize="14" fontWeight="bold"/>
+				</mx:HBox>
+				<mx:HBox width="30%" verticalAlign="bottom">
+					<mx:Label text="{resourceManager.getString('Financeiro:MovimentacaoFinanceira', 'labelTotalRenegociado')}:"/>
+					<mx:Label text="{FormatterUtil.formatDecimal(totalRenegociado)}" fontSize="14" fontWeight="bold"/>
+				</mx:HBox>
+			</controls:GradienteBox>
+			<mx:VDividedBox width="100%" height="100%">
+				<mx:HBox width="100%" height="50%">
+					<controls:ConfigurableDataGrid id="gridRenegOrig" width="100%" height="100%" doubleClick="gridOrigClicked()" doubleClickEnabled="true">
+						<controls:columns>
+							<mx:DataGridColumn headerText="{resourceManager.getString('Financeiro:MovimentacaoFinanceira', 'headerRenegAnt')}" dataField="NURENEGANT" width="80" textAlign="right" itemRenderer="{gridOrigLines}"/>
+							<mx:DataGridColumn headerText="{resourceManager.getString('Financeiro:MovimentacaoFinanceira', 'headerRenegAtual')}" dataField="NURENEG" width="80" textAlign="right" labelFunction="absFunction" itemRenderer="{gridOrigLines}"/>
+							<mx:DataGridColumn headerText="{resourceManager.getString('Financeiro:MovimentacaoFinanceira', 'headerNumeroNota')}" dataField="NUMNOTA" width="80" textAlign="right" itemRenderer="{gridOrigLines}"/>
+							<mx:DataGridColumn headerText="{resourceManager.getString('Financeiro:MovimentacaoFinanceira', 'headerDb')}" dataField="DESDOBRAMENTO" width="30" textAlign="right" labelFunction="formatTotal" itemRenderer="{gridOrigLines}"/>
+							<mx:DataGridColumn headerText="{resourceManager.getString('Financeiro:MovimentacaoFinanceira', 'headerNegociacao')}" dataField="DTNEG" width="80" textAlign="center" itemRenderer="{gridOrigLines}"/>
+							<mx:DataGridColumn headerText="{resourceManager.getString('Financeiro:MovimentacaoFinanceira', 'headerEmpresa')}" dataField="CODEMP" width="60" textAlign="right" itemRenderer="{gridOrigLines}"/>
+							<mx:DataGridColumn headerText="{resourceManager.getString('Financeiro:MovimentacaoFinanceira', 'headerVencimento')}" dataField="DTVENC" width="80" textAlign="center" itemRenderer="{gridOrigLines}"/>
+							<mx:DataGridColumn headerText="{resourceManager.getString('Financeiro:MovimentacaoFinanceira', 'headerValorDesdob')}" dataField="VLRDESDOB" width="145" textAlign="right" labelFunction="formatTotal" itemRenderer="{gridOrigLines}"/>
+							<mx:DataGridColumn headerText="{resourceManager.getString('Financeiro:MovimentacaoFinanceira', 'headerValorJuro')}" dataField="VLRJURO" width="145" textAlign="right" labelFunction="formatTotal" itemRenderer="{gridOrigLines}"/>
+							<mx:DataGridColumn headerText="{resourceManager.getString('Financeiro:MovimentacaoFinanceira', 'headerValorMulta')}" dataField="VLRMULTA" width="145" textAlign="right" labelFunction="formatTotal" itemRenderer="{gridOrigLines}"/>
+							<mx:DataGridColumn headerText="{resourceManager.getString('Financeiro:MovimentacaoFinanceira', 'headeValorDesconto')}" dataField="VLRDESC" width="145" textAlign="right" labelFunction="formatTotal" itemRenderer="{gridOrigLines}"/>
+							<mx:DataGridColumn headerText="{resourceManager.getString('Financeiro:MovimentacaoFinanceira', 'headerTotal')}" dataField="TOTAL" width="145" textAlign="right" labelFunction="formatTotal" itemRenderer="{gridOrigLines}"/>
+							<mx:DataGridColumn headerText="{resourceManager.getString('Financeiro:MovimentacaoFinanceira', 'headerSerie')}" dataField="SERIENOTA" width="40" itemRenderer="{gridOrigLines}"/>
+							<mx:DataGridColumn headerText="{resourceManager.getString('Financeiro:MovimentacaoFinanceira', 'headerHistorico')}" dataField="HISTORICO" width="500" itemRenderer="{gridOrigLines}"/>
+							<mx:DataGridColumn headerText="{resourceManager.getString('Financeiro:MovimentacaoFinanceira', 'headerTipo')}" dataField="RECDESP" width="65" itemRenderer="{gridOrigLines}" labelFunction="recDespLabelFunction"/>
+							<!--mx:DataGridColumn headerText="{resourceManager.getString('Financeiro:MovimentacaoFinanceira', 'headerTipoJuro')}" dataField="TIPJURO" width="65" itemRenderer="{gridOrigLines}"/>
+							<mx:DataGridColumn headerText="{resourceManager.getString('Financeiro:MovimentacaoFinanceira', 'headerTipoMulta')}" dataField="TIPMULTA" width="65" itemRenderer="{gridOrigLines}"/-->
+							<mx:DataGridColumn headerText="{resourceManager.getString('Financeiro:MovimentacaoFinanceira', 'headerParceiro')}" dataField="CODPARC" width="60" textAlign="right" itemRenderer="{gridOrigLines}"/>
+							<mx:DataGridColumn headerText="{resourceManager.getString('Financeiro:MovimentacaoFinanceira', 'headerNumeroUnico')}" dataField="NUFIN" width="100" textAlign="right" itemRenderer="{gridOrigLines}"/>
+							<mx:DataGridColumn headerText="{resourceManager.getString('Financeiro:MovimentacaoFinanceira', 'headerCodUsuReneg')}" dataField="CODUSU" width="60" textAlign="right" itemRenderer="{gridOrigLines}"/>
+							<mx:DataGridColumn headerText="{resourceManager.getString('Financeiro:MovimentacaoFinanceira', 'headerUsuarioRenegociacao')}" dataField="NOMEUSU" width="170" itemRenderer="{gridOrigLines}"/>
+							<mx:DataGridColumn headerText="{resourceManager.getString('Financeiro:MovimentacaoFinanceira', 'headerDataRenegociacao')}" dataField="DHALTER" width="80" textAlign="center" itemRenderer="{gridOrigLines}"/>
+						</controls:columns>
+					</controls:ConfigurableDataGrid>
+				</mx:HBox>
+				<mx:HBox width="100%" height="50%">
+					<controls:ConfigurableDataGrid id="gridResult" width="100%" height="100%" doubleClick="gridResultClicked()" doubleClickEnabled="true">
+						<controls:columns>
+							<mx:DataGridColumn headerText="{resourceManager.getString('Financeiro:MovimentacaoFinanceira', 'headerRenegPost')}" dataField="NURENEGPOST" width="80" textAlign="right" itemRenderer="{gridResultLines}"/>
+							<mx:DataGridColumn headerText="{resourceManager.getString('Financeiro:MovimentacaoFinanceira', 'headerNumeroNota')}" dataField="NUMNOTA" width="80" textAlign="right" itemRenderer="{gridResultLines}"/>
+							<mx:DataGridColumn headerText="{resourceManager.getString('Financeiro:MovimentacaoFinanceira', 'headerDb')}" dataField="DESDOBRAMENTO" width="30" textAlign="right" labelFunction="formatTotal" itemRenderer="{gridResultLines}"/>
+							<mx:DataGridColumn headerText="{resourceManager.getString('Financeiro:MovimentacaoFinanceira', 'headerNegociacao')}" dataField="DTNEG" width="80" textAlign="center" itemRenderer="{gridResultLines}"/>
+							<mx:DataGridColumn headerText="{resourceManager.getString('Financeiro:MovimentacaoFinanceira', 'headerEmpresa')}" dataField="CODEMP" width="60" textAlign="right" itemRenderer="{gridResultLines}"/>
+							<mx:DataGridColumn headerText="{resourceManager.getString('Financeiro:MovimentacaoFinanceira', 'headerVencimento')}" dataField="DTVENC" width="80" textAlign="center" itemRenderer="{gridResultLines}"/>
+							<mx:DataGridColumn headerText="{resourceManager.getString('Financeiro:MovimentacaoFinanceira', 'headerValorDesdob')}" dataField="VLRDESDOB" width="145" textAlign="right" labelFunction="formatTotal" itemRenderer="{gridResultLines}"/>
+							<mx:DataGridColumn headerText="{resourceManager.getString('Financeiro:MovimentacaoFinanceira', 'headerValorJuro')}" dataField="VLRJURO" width="145" textAlign="right" labelFunction="formatTotal" itemRenderer="{gridResultLines}"/>
+							<mx:DataGridColumn headerText="{resourceManager.getString('Financeiro:MovimentacaoFinanceira', 'headerValorMulta')}" dataField="VLRMULTA" width="145" textAlign="right" labelFunction="formatTotal" itemRenderer="{gridResultLines}"/>
+							<mx:DataGridColumn headerText="{resourceManager.getString('Financeiro:MovimentacaoFinanceira', 'headeValorDesconto')}" dataField="VLRDESC" width="145" textAlign="right" labelFunction="formatTotal" itemRenderer="{gridResultLines}"/>
+							<mx:DataGridColumn headerText="{resourceManager.getString('Financeiro:MovimentacaoFinanceira', 'headerTotal')}" dataField="TOTAL" width="145" textAlign="right" labelFunction="formatTotal" itemRenderer="{gridResultLines}"/>
+							<mx:DataGridColumn headerText="{resourceManager.getString('Financeiro:MovimentacaoFinanceira', 'headerSerie')}" dataField="SERIENOTA" width="40" itemRenderer="{gridResultLines}"/>
+							<mx:DataGridColumn headerText="{resourceManager.getString('Financeiro:MovimentacaoFinanceira', 'headerHistorico')}" dataField="HISTORICO" width="500" itemRenderer="{gridResultLines}"/>
+							<mx:DataGridColumn headerText="{resourceManager.getString('Financeiro:MovimentacaoFinanceira', 'headerTipo')}" dataField="RECDESP" width="65" itemRenderer="{gridResultLines}" labelFunction="recDespLabelFunction"/>
+							<mx:DataGridColumn headerText="{resourceManager.getString('Financeiro:MovimentacaoFinanceira', 'headerValorVendor')}" dataField="VLRVENDOR" width="145" textAlign="right" labelFunction="formatTotal" itemRenderer="{gridResultLines}"/>
+							<!--mx:DataGridColumn headerText="{resourceManager.getString('Financeiro:MovimentacaoFinanceira', 'headerTipoJuro')}" dataField="TIPJURO" width="65" itemRenderer="{gridResultLines}"/>
+							<mx:DataGridColumn headerText="{resourceManager.getString('Financeiro:MovimentacaoFinanceira', 'headerTipoMulta')}" dataField="TIPMULTA" width="65" itemRenderer="{gridResultLines}"/-->
+							<mx:DataGridColumn headerText="{resourceManager.getString('Financeiro:MovimentacaoFinanceira', 'headerValorIRF')}" dataField="VLRIRF" width="145" textAlign="right" labelFunction="formatTotal" itemRenderer="{gridResultLines}"/>
+							<mx:DataGridColumn headerText="{resourceManager.getString('Financeiro:MovimentacaoFinanceira', 'headerValorISS')}" dataField="VLRISS" width="145" textAlign="right" labelFunction="formatTotal" itemRenderer="{gridResultLines}"/>
+							<mx:DataGridColumn headerText="{resourceManager.getString('Financeiro:MovimentacaoFinanceira', 'headerBaseICMS')}" dataField="BASEICMS" width="145" textAlign="right" labelFunction="formatTotal" itemRenderer="{gridResultLines}"/>
+							<mx:DataGridColumn headerText="{resourceManager.getString('Financeiro:MovimentacaoFinanceira', 'headerAliquotaICMS')}" dataField="ALIQICMS" width="145" textAlign="right" labelFunction="formatTotal" itemRenderer="{gridResultLines}"/>
+							<mx:DataGridColumn headerText="{resourceManager.getString('Financeiro:MovimentacaoFinanceira', 'headerBanco')}" dataField="CODBCO" width="45" textAlign="right" itemRenderer="{gridResultLines}"/>
+							<mx:DataGridColumn headerText="{resourceManager.getString('Financeiro:MovimentacaoFinanceira', 'headerCentroResultado')}" dataField="CODCENCUS" width="110" textAlign="right" itemRenderer="{gridResultLines}"/>
+							<mx:DataGridColumn headerText="{resourceManager.getString('Financeiro:MovimentacaoFinanceira', 'headerMoeda')}" dataField="CODMOEDA" width="45" textAlign="right" itemRenderer="{gridResultLines}"/>
+							<mx:DataGridColumn headerText="{resourceManager.getString('Financeiro:MovimentacaoFinanceira', 'headerNatureza')}" dataField="CODNAT" width="65" textAlign="right" itemRenderer="{gridResultLines}"/>
+							<mx:DataGridColumn headerText="{resourceManager.getString('Financeiro:MovimentacaoFinanceira', 'headerTipoOperacao')}" dataField="CODTIPOPER" width="110" textAlign="right" itemRenderer="{gridResultLines}"/>
+							<mx:DataGridColumn headerText="{resourceManager.getString('Financeiro:MovimentacaoFinanceira', 'headerTipoTitulo')}" dataField="CODTIPTIT" width="80" textAlign="right" itemRenderer="{gridResultLines}"/>
+							<mx:DataGridColumn headerText="{resourceManager.getString('Financeiro:MovimentacaoFinanceira', 'headerVendedor')}" dataField="CODVEND" width="65" textAlign="right" itemRenderer="{gridResultLines}"/>
+							<mx:DataGridColumn headerText="{resourceManager.getString('Financeiro:MovimentacaoFinanceira', 'headerNumeroUnico')}" dataField="NUFIN" width="85" textAlign="right" itemRenderer="{gridResultLines}"/>
+							<mx:DataGridColumn headerText="{resourceManager.getString('Financeiro:MovimentacaoFinanceira', 'headerCodUsuReneg')}" dataField="CODUSU" width="60" textAlign="right" itemRenderer="{gridResultLines}"/>
+							<mx:DataGridColumn headerText="{resourceManager.getString('Financeiro:MovimentacaoFinanceira', 'headerUsuarioRenegociacao')}" dataField="NOMEUSU" width="170" itemRenderer="{gridResultLines}"/>
+							<mx:DataGridColumn headerText="{resourceManager.getString('Financeiro:MovimentacaoFinanceira', 'headerDataRenegociacao')}" dataField="DHALTER" width="80" textAlign="center" itemRenderer="{gridResultLines}"/>
+						</controls:columns>
+					</controls:ConfigurableDataGrid>
+				</mx:HBox>
+			</mx:VDividedBox>
+			<mx:ControlBar horizontalAlign="right">
+				<mx:Button label="{resourceManager.getString('Geral', 'buttonCancelar')}" click="closePopUp()" buttonMode="true"/>
+			</mx:ControlBar>
+		</mx:TitleWindow>
+	</mx:Component>
+    <mx:Component id="gridLines">
+    	<mx:Label width="100%">
+			<mx:Script>
+				<![CDATA[
+					override protected function updateDisplayList(unscaledWidth:Number, unscaledHeight:Number):void {
+						super.updateDisplayList(unscaledWidth, unscaledHeight);
+
+						if(Number(data["RECDESP"]) == 1) {
+							setStyle("color", outerDocument.corReceita);
+						} else {
+							setStyle("color", outerDocument.corDespesa);
+						}
+					}
+				]]>
+			</mx:Script>
+    	</mx:Label>
+    </mx:Component>
+
+	<mx:ViewStack id="vSFinanceiro" width="100%" height="100%">
+		<dynaform:Dynaform id="dynaformFinanceiro" entityName="Financeiro" providerName="mge@CRUDServiceProvider"  width="100%" height="100%" dynaformVisitor="{this}" creationPolicy="all" fieldBuilder="{this}" paddingBottom="5" paddingLeft="5" paddingRight="5" paddingTop="5" gridPrinterParam="{this}" fieldsVisitor="{this}" helperClassName="br.com.sankhya.modelcore.dynaform.MovimentacaoFinanceiraDynaformHelper">
+			<dynaform:topBars>
+				<mx:Button label="{i18n('Financeiro:MovimentacaoFinanceira','btnPreferencias')}" toolTip="{i18n('Financeiro:MovimentacaoFinanceira','btnPreferencias')}" click="openPreferencias()" buttonMode="true"/>
+				<popupbutton:SanPopUpButton id="popUpOutrasOpcoes" label="{i18n('Geral', 'buttonOutrasOpcoes')}" toolTip="{i18n('Geral', 'buttonOutrasOpcoes')}" buttonMode="true" openAlways="true"/>
+			</dynaform:topBars>
+			<dynaform:headerPanel>
+				<compactpanel:SanCompactPanel id="FiltrosMovFinanceiro" direction="vertical" positionButtonShowHide="afterContainer" widthBtnShowHide="100" heightBtnShowHide="8" width="100%">
+					<compactpanel:content>
+						<controls:GradienteBox width="100%" creationComplete="initHeaderPanel()">
+							<mx:HBox id="content" width="100%">
+								<mx:HBox verticalAlign="top">
+									<mx:VBox id="RecDespFiltrosMovFinanceiro" width="80" height="100%">
+								    	<mx:CheckBox id="chkReceita" label="{i18n('Financeiro:MovimentacaoFinanceira', 'headerReceitas')}" change="checkRecDesp(chkReceita, chkDespesa)"/>
+					                    <mx:CheckBox id="chkDespesa" label="{i18n('Financeiro:MovimentacaoFinanceira', 'headerDespesas')}" change="checkRecDesp(chkDespesa, chkReceita)"/>
+								    </mx:VBox>
+								    <mx:VBox id="RealProvFiltrosMovFinanceiro" width="80" height="100%">
+								    	<mx:CheckBox id="chkReal" label="{i18n('Financeiro:MovimentacaoFinanceira', 'headerReal')}" change="checkPair(chkReal, chkProvisao)"/>
+					                    <mx:CheckBox id="chkProvisao" label="{i18n('Financeiro:MovimentacaoFinanceira', 'headerProvisao')}" change="checkPair(chkProvisao, chkReal)"/>
+								    </mx:VBox>
+								    <mx:VBox id="PendBaixFiltrosMovFinanceiro" height="100%">
+								    	<mx:CheckBox id="chkPendente" label="{i18n('Financeiro:MovimentacaoFinanceira', 'headerPendentes')}" change="checkPair(chkPendente, chkBaixado)"/>
+					                    <mx:CheckBox id="chkBaixado" label="{i18n('Financeiro:MovimentacaoFinanceira', 'headerBaixados')}" change="checkPair(chkBaixado, chkPendente)"/>
+								    </mx:VBox>
+								</mx:HBox>
+								<mx:VBox verticalAlign="top" width="100%">
+								    <mx:HBox id="DataIntervaloFiltrosMovFinanceiro" width="100%" verticalAlign="middle">
+								        <mx:Label text="{i18n('Financeiro:MovimentacaoFinanceira', 'headerVencimento')}:"/>
+								        <ui:DBDateField id="dtVencIni" editable="true"/>
+								    	<mx:Label text="{i18n('Controls:DateTime', 'labelSeparadorPeriodo')}"/>
+								    	<ui:DBDateField id="dtVencFim" editable="true" />
+								        <mx:Label text="{i18n('Financeiro:MovimentacaoFinanceira', 'labelNroNota')}:"/>
+								        <!-- <mx:TextInput id="edNroNota" width="92"/> -->
+								        <controls:NumericInput precision="0" id="edNroNota"/>
+								        <mx:Label text="{i18n('Financeiro:MovimentacaoFinanceira', 'labelNroUnico')}:"/>
+								        <controls:NumericInput precision="0" id="nroUnico"/>
+								    </mx:HBox>
+								    <mx:HBox id="ParcFiltrosMovFinanceiro" width="100%" verticalAlign="middle">
+								        <mx:Label text="{i18n('Financeiro:MovimentacaoFinanceira', 'headerParceiro')}:" paddingLeft="21"/>
+								        <dwf:Pesquisa id="pesqParc" codeInputWidth="84" fieldName="CODPARC" entityName="Parceiro" showInactives="true"/>
+     								    <mx:Label text="{i18n('Financeiro:MovimentacaoFinanceira', 'headerNroPedido')}:" visible="{_paramUtilizaNroPedidoFinanceiro}" includeInLayout="{_paramUtilizaNroPedidoFinanceiro}"/>
+								        <controls:NumericInput precision="0" id="nroPedido" visible="{_paramUtilizaNroPedidoFinanceiro}" includeInLayout="{_paramUtilizaNroPedidoFinanceiro}"/>
+								        <mx:HBox width="100%" verticalAlign="middle">
+									    	<mx:Button id="btaplicar" label="{i18n('Financeiro:MovimentacaoFinanceira', 'buttonAplicarFiltro')}" toolTip="{i18n('Financeiro:MovimentacaoFinanceira', 'buttonAplicarFiltro')}" click="aplicarFiltro()" buttonMode="true"/>
+								        </mx:HBox>
+								    </mx:HBox>
+								</mx:VBox>
+							</mx:HBox>
+							<mx:HBox id="acoes" width="100%">
+						    	<mx:Button id="btnBaixar" toolTip="{btnBaixar.label}" width="100%" label="{i18n('Commons:Baixa', 'buttonBaixar')}" buttonMode="true" click="baixar()"/>
+						    	<mx:Button id="btnEstornar" toolTip="{btnEstornar.label}" width="100%" label="{i18n('Financeiro:MovimentacaoFinanceira', 'buttonEstornar')}" buttonMode="true" click="estornar()"/>
+								<mx:Button id="btnRatear" toolTip="{btnRatear.label}" width="100%" label="{i18n('Commons:Rateio', 'buttonRatear')}" click="ratear()" buttonMode="true"/>
+						    	<mx:Button id="btnParcelar" toolTip="{btnParcelar.label}" width="100%" label="{i18n('Financeiro:MovimentacaoFinanceira', 'buttonParcelar')}" click="parcelar()" buttonMode="true"/>
+						    	<mx:Button id="btnRenegociar" toolTip="{btnRenegociar.label}" width="100%" label="{i18n('Financeiro:MovimentacaoFinanceira', 'buttonVerRenegociacao')}" click="renegociar()" buttonMode="true"/>
+						    	<mx:Button id="btnEquifax" toolTip="{i18n('Financeiro:MovimentacaoFinanceira', 'buttonConsultaChequesEquifax')}" height="100%" width="100%" click="consultaEquifax()" buttonMode="true" includeInLayout="{_equifaxDisponivel}" visible="{_equifaxDisponivel}"/>
+						    </mx:HBox>
+						</controls:GradienteBox>
+					</compactpanel:content>
+				</compactpanel:SanCompactPanel>
+			</dynaform:headerPanel>
+		</dynaform:Dynaform>
+	    <baixa:BaixaPanel id="baixaPanel" width="100%" height="100%" resourceID="{getApplicationResourceID()}"/>
+	</mx:ViewStack>
+	<controls:GradienteBox id="barraTotalizadores" width="100%" direction="horizontal" horizontalGap="0" paddingBottom="0" paddingLeft="3" paddingRight="3" paddingTop="0">
+		<mx:HBox width="23%" horizontalGap="0" paddingLeft="2">
+			<mx:VRule height="18" visible="false" />
+			<mx:Spacer width="3" />
+			<mx:Label fontSize="13" fontWeight="bold" text="{i18n('Financeiro:MovimentacaoFinanceira', 'labelReceita')}:"/>
+			<mx:Label fontSize="13" id="lblVlrRec" fontWeight="bold"/>
+		</mx:HBox>
+		<mx:HBox width="20%" horizontalGap="0" >
+			<mx:VRule height="18" />
+			<mx:Spacer width="3" />
+			<mx:Label fontSize="13" fontWeight="bold" text="{i18n('Financeiro:MovimentacaoFinanceira', 'labelDespesa')}:"/>
+			<mx:Label fontSize="13" id="lblVlrDesp" fontWeight="bold"/>
+		</mx:HBox>
+		<mx:HBox width="29%" horizontalGap="0" >
+			<mx:VRule height="18" />
+			<mx:Spacer width="3" />
+			<mx:Label fontSize="13" fontWeight="bold" text="{i18n('Financeiro:MovimentacaoFinanceira', 'labelDifRecDespesa')}:"/>
+			<mx:Label fontSize="13" id="lblVlrRecDesp" fontWeight="bold"/>
+		</mx:HBox>	
+		<mx:HBox width="24%" horizontalGap="0" >
+			<mx:VRule height="18" />
+			<mx:Spacer width="3" />
+			<mx:Label fontSize="13" fontWeight="bold" text="{i18n('Financeiro:MovimentacaoFinanceira', 'labelTotalBaixado')}:"/>
+			<mx:Label fontSize="13" id="lblVlrTotBaixado" fontWeight="bold"/>
+		</mx:HBox>
+		<mx:HBox width="29%" horizontalGap="0" >
+			<mx:VRule height="18" />
+			<mx:Spacer width="3" />
+			<mx:Label fontSize="13" fontWeight="bold" text="{i18n('Financeiro:MovimentacaoFinanceira', 'labelTotalAberto')}:"/>
+			<mx:Label fontSize="13" id="lblVlrTotAberto" fontWeight="bold"/>
+		</mx:HBox>	
+	</controls:GradienteBox>	
+</controls:DefaultSankhyaApplication>
